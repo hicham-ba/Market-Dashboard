@@ -435,11 +435,14 @@ if (typeof window !== "undefined" && !window.__mue) {
 }
 
 function mueLog(msg) {
-  if (typeof window !== "undefined" && window.__mue) {
-    window.__mue.log.push(msg);
-    if (window.__mue.log.length > 20) window.__mue.log.shift();
-  }
-  var el = typeof document !== "undefined" ? document.getElementById("api-log") : null;
+  try {
+    if (typeof window !== "undefined" && window.__mue) {
+      if (!window.__mue.log) window.__mue.log = [];
+      window.__mue.log.push(msg);
+      if (window.__mue.log.length > 20) window.__mue.log.shift();
+    }
+  } catch(e) {}
+  var el = typeof document !== "undefined" ? document.getElementById("finnhub-log") : null;
   if (el) el.textContent = msg;
 }
 
@@ -471,9 +474,27 @@ function LiveDataPanel(props) {
   }, [autoRefresh, connected]);
 
   function doFetch() {
-    mueLog("Fetching via server proxy...");
-    setStatus("loading"); setMsg("Fetching...");
-    setConnected(true);
+    mueLog("Checking server...");
+    setStatus("loading"); setMsg("Checking server...");
+
+    // First verify the proxy is working
+    fetch("/api/health").then(function(r) { return r.json(); }).then(function(health) {
+      if (health.finnhubKey && health.finnhubKey.indexOf("MISSING") >= 0) {
+        mueLog("FINNHUB_KEY not set in Vercel! Go to Settings > Environment Variables");
+        setStatus("idle"); setMsg("FINNHUB_KEY missing in Vercel env vars");
+        return;
+      }
+      mueLog("Server OK. Fetching " + getAllTickers(currentIdx).length + " stocks...");
+      setMsg("Fetching...");
+      setConnected(true);
+      doFetchQuotes();
+    }).catch(function(err) {
+      mueLog("Server error: " + (err.message || err) + ". Check Vercel deployment.");
+      setStatus("idle"); setMsg("Server unreachable - check deployment");
+    });
+  }
+
+  function doFetchQuotes() {
 
     var tickers = getAllTickers(currentIdx);
     var extras = ["DIA", "SPY", "QQQ"].concat(MACRO_PROXY_SYMBOLS);
