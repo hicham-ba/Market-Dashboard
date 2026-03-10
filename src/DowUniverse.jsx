@@ -608,21 +608,48 @@ function fetchClaudeIntel(prompt) {
   }).then(function(r) { return r.json(); });
 }
 
+function stripCitations(str) {
+  if (typeof str !== "string") return str;
+  // Strip <cite ...>...</cite> tags
+  str = str.replace(/<cite[^>]*>/gi, "").replace(/<\/cite>/gi, "");
+  // Strip ... tags
+  str = str.replace(/]*>/gi, "").replace(/<\/antml:cite>/gi, "");
+  // Strip any remaining XML-style citation tags
+  str = str.replace(/<[a-z]*:?cite[^>]*>/gi, "").replace(/<\/[a-z]*:?cite>/gi, "");
+  return str;
+}
+
+function cleanParsed(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  Object.keys(obj).forEach(function(k) {
+    if (typeof obj[k] === "string") obj[k] = stripCitations(obj[k]);
+    else if (Array.isArray(obj[k])) {
+      obj[k].forEach(function(item, i) {
+        if (typeof item === "string") obj[k][i] = stripCitations(item);
+        else if (typeof item === "object") cleanParsed(item);
+      });
+    } else if (typeof obj[k] === "object") cleanParsed(obj[k]);
+  });
+  return obj;
+}
+
 function parseClaudeJSON(data) {
   if (!data || !data.content) return null;
   var text = "";
   data.content.forEach(function(block) {
     if (block.type === "text") text += block.text;
   });
+  // Strip citation tags before parsing
+  text = stripCitations(text);
   // Try to extract JSON from the response
   text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-  try { return JSON.parse(text); }
+  try { return cleanParsed(JSON.parse(text)); }
   catch(e) {
     // Try to find JSON object in the text
     var start = text.indexOf("{");
     var end = text.lastIndexOf("}");
     if (start >= 0 && end > start) {
-      try { return JSON.parse(text.substring(start, end + 1)); }
+      try { return cleanParsed(JSON.parse(text.substring(start, end + 1))); }
       catch(e2) { return null; }
     }
     return null;
@@ -649,7 +676,7 @@ function fetchAllIntelligence(onUpdate) {
   // 1. Smart Money
   if (logEl) logEl.textContent = "Fetching smart money signals...";
   fetchClaudeIntel(
-    'Search for today\'s unusual stock market activity: unusual options volume, insider buying/selling, dark pool prints, and stocks with volume 150%+ above average. Return ONLY a JSON object with no other text: {"signals":[{"ticker":"XX","signal":"description of the unusual activity","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 8-12 signals. Focus on actionable unusual activity from today only.'
+    'Search for today\'s unusual stock market activity: unusual options volume, insider buying/selling, dark pool prints, and stocks with volume 150%+ above average. Return ONLY a JSON object with no other text: {"signals":[{"ticker":"XX","signal":"description of the unusual activity","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 8-12 signals. Focus on actionable unusual activity from today only. Do not include any citation tags or XML tags in your response.'
   ).then(function(data) {
     var parsed = parseClaudeJSON(data);
     if (parsed && parsed.signals) results.smartMoney = parsed.signals;
@@ -659,7 +686,7 @@ function fetchAllIntelligence(onUpdate) {
   // 2. Sector Flows
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today (SPY, QQQ, XLE, XLF, TLT, XLK, XLV, etc)? Return ONLY a JSON object: {"flows":[{"from":"Sector losing money","to":"Sector gaining money","flow":"$X.XB estimated","label":"description of why this rotation is happening","drivers":["driver1","driver2"]}]} Include 4-6 major flows. Focus on today\'s actual movement.'
+      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today (SPY, QQQ, XLE, XLF, TLT, XLK, XLV, etc)? Return ONLY a JSON object: {"flows":[{"from":"Sector losing money","to":"Sector gaining money","flow":"$X.XB estimated","label":"description of why this rotation is happening","drivers":["driver1","driver2"]}]} Include 4-6 major flows. Focus on today's actual movement. Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.flows) results.flows = parsed.flows;
@@ -670,7 +697,7 @@ function fetchAllIntelligence(onUpdate) {
   // 3. Institutional Activity
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s institutional investor activity in the stock market: major fund moves, ETF inflows/outflows, and notable hedge fund positions or 13F filings. Return ONLY a JSON object: {"institutions":[{"name":"Fund Name","aum":"$X.XT if known","move":"what they are doing today","signal":"one word like Risk-Off or Rotate or Defensive or Accumulate","color":"#hex color"}]} Include 8-10 institutions. Focus on what big money is actually doing today.'
+      'Search for today\'s institutional investor activity in the stock market: major fund moves, ETF inflows/outflows, and notable hedge fund positions or 13F filings. Return ONLY a JSON object: {"institutions":[{"name":"Fund Name","aum":"$X.XT if known","move":"what they are doing today","signal":"one word like Risk-Off or Rotate or Defensive or Accumulate","color":"#hex color"}]} Include 8-10 institutions. Focus on what big money is actually doing today. Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.institutions) results.institutions = parsed.institutions;
@@ -681,7 +708,7 @@ function fetchAllIntelligence(onUpdate) {
   // 4. Market Summary Narrative + Fear & Greed
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s stock market summary. What are the major indexes doing (Dow, S&P 500, NASDAQ)? What is driving the market today? What is the CNN Fear & Greed Index value today? Return ONLY a JSON object: {"narrative":"2-3 sentence summary of today\'s market action and what is driving it","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX value","oil":"current oil price","headline":"one line headline"}'
+      'Search for today\'s stock market summary. What are the major indexes doing (Dow, S&P 500, NASDAQ)? What is driving the market today? What is the CNN Fear & Greed Index value today? Return ONLY a JSON object: {"narrative":"2-3 sentence summary of today\'s market action and what is driving it","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX value","oil":"current oil price","headline":"one line headline"} Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed) {
@@ -699,7 +726,7 @@ function fetchAllIntelligence(onUpdate) {
   // 5. Scanner Intelligence - live stock signals for strategy scoring
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s strongest stock buy and sell signals across the S&P 500. I need stocks showing: unusual volume, RSI extremes, analyst upgrades/downgrades, insider buying/selling, and earnings surprises. Return ONLY a JSON object: {"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish or Neutral","catalyst":"why this stock is signaling today","analyst":"Buy or Sell if any analyst change today","insiderActivity":"description or None"}]} Include 15-20 stocks with the strongest signals today. Mix of buys and sells.'
+      'Search for today\'s strongest stock buy and sell signals across the S&P 500. I need stocks showing: unusual volume, RSI extremes, analyst upgrades/downgrades, insider buying/selling, and earnings surprises. Return ONLY a JSON object: {"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish or Neutral","catalyst":"why this stock is signaling today","analyst":"Buy or Sell if any analyst change today","insiderActivity":"description or None"}]} Include 15-20 stocks with the strongest signals today. Mix of buys and sells. Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.stocks) results.scannerData = parsed.stocks;
