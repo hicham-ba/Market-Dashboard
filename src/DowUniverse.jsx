@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// MARKET UNIVERSE EXPLORER v14 - Final clean build
+// MARKET UNIVERSE EXPLORER v15 - Final clean build
 // Real closing data: Friday, March 6, 2026
 // CNN Fear & Greed: 27 (Fear) - verified
 
 var mono = "'SF Mono','Fira Code','Consolas',monospace";
+
+// Inject CSS animations for 7/7 pulse effects
+if (typeof document !== "undefined" && !document.getElementById("mue-animations")) {
+  var style = document.createElement("style");
+  style.id = "mue-animations";
+  style.textContent = [
+    "@keyframes pulse-glow { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }",
+    "@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }",
+    ".pulse-card { animation: card-pulse 2s ease-in-out infinite; }",
+    "@keyframes card-pulse { 0%,100% { box-shadow: 0 0 15px rgba(224,64,251,0.1); } 50% { box-shadow: 0 0 30px rgba(224,64,251,0.25), 0 0 60px rgba(224,64,251,0.1); } }"
+  ].join("\n");
+  document.head.appendChild(style);
+}
 var h = React.createElement;
 
 function Chg(props) {
@@ -619,9 +632,9 @@ function parseClaudeJSON(data) {
 function fetchAllIntelligence(onUpdate) {
   var logEl = typeof document !== "undefined" ? document.getElementById("intel-log") : null;
 
-  var results = { smartMoney: null, flows: null, institutions: null, timestamp: "" };
+  var results = { smartMoney: null, flows: null, institutions: null, narrative: null, scannerData: null, fearGreed: null, timestamp: "" };
   var done = 0;
-  var total = 3;
+  var total = 5;
 
   function checkDone() {
     done++;
@@ -636,20 +649,17 @@ function fetchAllIntelligence(onUpdate) {
   // 1. Smart Money
   if (logEl) logEl.textContent = "Fetching smart money signals...";
   fetchClaudeIntel(
-    'Search for today\'s unusual stock market activity: unusual options volume, insider buying/selling, dark pool prints, and stocks with volume 150%+ above average. Return ONLY a JSON object with no other text: {"signals":[{"ticker":"XX","signal":"description","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 6-10 signals. Focus on actionable unusual activity from today.'
+    'Search for today\'s unusual stock market activity: unusual options volume, insider buying/selling, dark pool prints, and stocks with volume 150%+ above average. Return ONLY a JSON object with no other text: {"signals":[{"ticker":"XX","signal":"description of the unusual activity","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 8-12 signals. Focus on actionable unusual activity from today only.'
   ).then(function(data) {
     var parsed = parseClaudeJSON(data);
     if (parsed && parsed.signals) results.smartMoney = parsed.signals;
     checkDone();
-  }).catch(function(e) {
-    if (logEl) logEl.textContent = "Smart money error: " + (e.message || e);
-    checkDone();
-  });
+  }).catch(function(e) { checkDone(); });
 
   // 2. Sector Flows
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today? Return ONLY a JSON object: {"flows":[{"from":"Sector A","to":"Sector B","flow":"$X.XB","label":"description of the rotation","drivers":["driver1","driver2"]}]} Include 4-6 flows. Focus on today\'s actual sector movement.'
+      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today (SPY, QQQ, XLE, XLF, TLT, XLK, XLV, etc)? Return ONLY a JSON object: {"flows":[{"from":"Sector losing money","to":"Sector gaining money","flow":"$X.XB estimated","label":"description of why this rotation is happening","drivers":["driver1","driver2"]}]} Include 4-6 major flows. Focus on today\'s actual movement.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.flows) results.flows = parsed.flows;
@@ -660,25 +670,55 @@ function fetchAllIntelligence(onUpdate) {
   // 3. Institutional Activity
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s institutional investor activity in the stock market: major fund moves, ETF inflows/outflows (SPY, QQQ, XLE, XLF, TLT etc), and notable hedge fund positions. Return ONLY a JSON object: {"institutions":[{"name":"Fund Name","aum":"$X.XT","move":"what they are doing today","signal":"one word signal like Risk-Off or Rotate or Defensive","color":"#hex color"}]} Include 8-10 institutions. Focus on what big money is actually doing today.'
+      'Search for today\'s institutional investor activity in the stock market: major fund moves, ETF inflows/outflows, and notable hedge fund positions or 13F filings. Return ONLY a JSON object: {"institutions":[{"name":"Fund Name","aum":"$X.XT if known","move":"what they are doing today","signal":"one word like Risk-Off or Rotate or Defensive or Accumulate","color":"#hex color"}]} Include 8-10 institutions. Focus on what big money is actually doing today.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.institutions) results.institutions = parsed.institutions;
       checkDone();
     }).catch(function(e) { checkDone(); });
   }, 4000);
+
+  // 4. Market Summary Narrative + Fear & Greed
+  setTimeout(function() {
+    fetchClaudeIntel(
+      'Search for today\'s stock market summary. What are the major indexes doing (Dow, S&P 500, NASDAQ)? What is driving the market today? What is the CNN Fear & Greed Index value today? Return ONLY a JSON object: {"narrative":"2-3 sentence summary of today\'s market action and what is driving it","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX value","oil":"current oil price","headline":"one line headline"}'
+    ).then(function(data) {
+      var parsed = parseClaudeJSON(data);
+      if (parsed) {
+        results.narrative = parsed.narrative || null;
+        results.fearGreed = parsed.fearGreed || null;
+        results.fearLabel = parsed.fearLabel || null;
+        results.vix = parsed.vix || null;
+        results.oil = parsed.oil || null;
+        results.headline = parsed.headline || null;
+      }
+      checkDone();
+    }).catch(function(e) { checkDone(); });
+  }, 6000);
+
+  // 5. Scanner Intelligence - live stock signals for strategy scoring
+  setTimeout(function() {
+    fetchClaudeIntel(
+      'Search for today\'s strongest stock buy and sell signals across the S&P 500. I need stocks showing: unusual volume, RSI extremes, analyst upgrades/downgrades, insider buying/selling, and earnings surprises. Return ONLY a JSON object: {"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish or Neutral","catalyst":"why this stock is signaling today","analyst":"Buy or Sell if any analyst change today","insiderActivity":"description or None"}]} Include 15-20 stocks with the strongest signals today. Mix of buys and sells.'
+    ).then(function(data) {
+      var parsed = parseClaudeJSON(data);
+      if (parsed && parsed.stocks) results.scannerData = parsed.stocks;
+      checkDone();
+    }).catch(function(e) { checkDone(); });
+  }, 8000);
 }
 
 // ============================================================
 // STRATEGY SCANNER
 // ============================================================
 
-function scanStrategies(allIndexes, macro, smartMoney, lc) {
-  // Collect ALL stocks from ALL indexes, dedup by ticker (keep first occurrence)
+function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
+  var intel = liveIntel || {};
+  var hasLiveIntel = intel.timestamp && intel.timestamp.length > 0;
+
+  // Build stock universe from all indexes
   var allStocks = [];
   var seen = {};
-  var allFlows = [];
-  var allInstitutions = [];
   var worstPct = 0;
 
   Object.keys(allIndexes).forEach(function(idxKey) {
@@ -692,62 +732,123 @@ function scanStrategies(allIndexes, macro, smartMoney, lc) {
         }
       });
     });
-    // Merge flows from all indexes
-    (d.flows || []).forEach(function(f) { allFlows.push(f); });
-    // Merge institutions (dedup by name)
-    var instSeen = {};
-    (d.institutions || []).forEach(function(inv) {
-      if (!instSeen[inv.name]) { instSeen[inv.name] = true; allInstitutions.push(inv); }
-    });
   });
 
-  var totalStocks = allStocks.length;
-  var results = { fear: [], smartFollow: [], rotation: [], totalScanned: totalStocks };
+  // Build live scanner overlay: ticker -> live signals from Claude
+  var liveSignals = {};
+  if (intel.scannerData && intel.scannerData.length > 0) {
+    intel.scannerData.forEach(function(s) {
+      if (s.ticker) liveSignals[s.ticker] = s;
+    });
+  }
 
-  // STRATEGY 1: Fear Rotation - quality bargains in panic
-  var isFearEnv = macro.fearGreed <= 30;
+  // Use live smart money or fall back to static
+  var smartMoneyList = (intel.smartMoney && intel.smartMoney.length > 0) ? intel.smartMoney : staticSmartMoney;
+  var smartTickers = {};
+  smartMoneyList.forEach(function(s) {
+    var t = s.ticker;
+    var isBullish = s.type === "Accumulation" || s.type === "Upgrade" || s.type === "Insider Buy";
+    if (t && isBullish) smartTickers[t] = s;
+  });
+
+  // Use live flows or fall back to static
+  var allFlows = [];
+  if (intel.flows && intel.flows.length > 0) {
+    intel.flows.forEach(function(f) { allFlows.push(f); });
+  } else {
+    Object.keys(allIndexes).forEach(function(k) { (allIndexes[k].flows || []).forEach(function(f) { allFlows.push(f); }); });
+  }
+
+  // Use live institutions or fall back to static
+  var allInstitutions = [];
+  if (intel.institutions && intel.institutions.length > 0) {
+    intel.institutions.forEach(function(inv) { allInstitutions.push(inv); });
+  } else {
+    var instSeen2 = {};
+    Object.keys(allIndexes).forEach(function(k) {
+      (allIndexes[k].institutions || []).forEach(function(inv) {
+        if (!instSeen2[inv.name]) { instSeen2[inv.name] = true; allInstitutions.push(inv); }
+      });
+    });
+  }
+
+  // Use live Fear & Greed or fall back to static
+  var fearGreed = (intel.fearGreed && intel.fearGreed > 0) ? intel.fearGreed : macro.fearGreed;
+
+  var totalStocks = allStocks.length;
+  var results = { fear: [], smartFollow: [], rotation: [], totalScanned: totalStocks, isLiveIntel: hasLiveIntel };
+
+  // STRATEGY 1: Fear Rotation
+  var isFearEnv = fearGreed <= 30;
   allStocks.forEach(function(item) {
-    var st = item.stock; var sig = st.signals || {};
+    var st = item.stock;
+    var sig = st.signals || {};
+    var live = liveSignals[st.ticker];
     var score = 0; var reasons = [];
-    var isSellSignal = sig.composite === "Sell" || sig.composite === "Strong Sell";
-    var above200 = sig.sma200 === "Above";
-    var isQuality = st.analystRating === "Buy" || st.analystRating === "Strong Buy";
+
+    // Use live signals when available, otherwise static
+    var action = live ? live.action : sig.composite;
+    var isSellSignal = action === "Sell" || action === "Strong Sell";
+    var above200 = sig.sma200 === "Above"; // Keep static MA position
+    var analyst = live ? (live.analyst || st.analystRating) : st.analystRating;
+    var isQuality = analyst === "Buy" || analyst === "Strong Buy";
     var instHigh = parseFloat(st.instOwn) >= 65;
     var targetUpside = st.priceTarget > 0 ? ((st.priceTarget - st.price) / st.price * 100) : 0;
+    var rsi = live ? (live.rsi || st.rsi) : st.rsi;
 
-    if (isFearEnv) score++;
+    if (isFearEnv) { score++; reasons.push("F&G " + fearGreed + (hasLiveIntel ? " (live)" : "")); }
     if (isSellSignal && above200) { score += 2; reasons.push("Oversold but above 200-day"); }
-    if (isQuality) { score++; reasons.push("Analyst " + st.analystRating); }
+    if (isQuality) { score++; reasons.push("Analyst " + analyst + (live && live.analyst ? " (live)" : "")); }
     if (instHigh) { score++; reasons.push(st.instOwn + " inst owned"); }
     if (targetUpside >= 15) { score++; reasons.push("Target $" + st.priceTarget + " (+" + targetUpside.toFixed(0) + "%)"); }
-    if (st.rsi && st.rsi < 35) { score++; reasons.push("RSI " + st.rsi + " oversold"); }
+    if (rsi && rsi < 35) { score++; reasons.push("RSI " + rsi + " oversold" + (live && live.rsi ? " (live)" : "")); }
 
     if (score >= 4 && isSellSignal && above200) {
       reasons.push(item.index);
-      results.fear.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, rating: sig.composite, target: st.priceTarget, index: item.index });
+      results.fear.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, index: item.index });
     }
   });
 
-  // STRATEGY 2: Smart Money Follow - institutional footprint
-  var smartTickers = {};
-  smartMoney.forEach(function(s) { if (s.type === "Accumulation" || s.type === "Upgrade") smartTickers[s.ticker] = s; });
+  // Also scan live scannerData stocks that aren't in our universe
+  if (intel.scannerData) {
+    intel.scannerData.forEach(function(ls) {
+      if (seen[ls.ticker]) return; // Already scanned above
+      var action = ls.action;
+      var isSell = action === "Sell" || action === "Strong Sell";
+      var rsi = ls.rsi || 50;
+      if (isSell && isFearEnv && rsi < 40) {
+        var score = 3;
+        var reasons = ["LIVE SIGNAL: " + (ls.catalyst || ls.action)];
+        if (isFearEnv) { score++; reasons.push("F&G " + fearGreed + " (live)"); }
+        if (rsi < 35) { score++; reasons.push("RSI " + rsi + " oversold (live)"); }
+        if (ls.volume_vs_avg && parseFloat(ls.volume_vs_avg) > 150) { score++; reasons.push("Vol " + ls.volume_vs_avg + " avg (live)"); }
+        results.fear.push({ ticker: ls.ticker, name: ls.ticker, price: 0, change: 0, score: Math.min(score, 7), reasons: reasons, color: "#00d4ff", sector: "Live Signal", index: "LIVE" });
+      }
+    });
+  }
 
+  // STRATEGY 2: Smart Money Follow
   allStocks.forEach(function(item) {
-    var st = item.stock; var sig = st.signals || {};
+    var st = item.stock;
+    var sig = st.signals || {};
+    var live = liveSignals[st.ticker];
     var sm = smartTickers[st.ticker];
     var score = 0; var reasons = [];
 
     var isGreenOnRed = lc(st.ticker, st.change) > 0 && worstPct < 0;
     var volHigh = parseFloat(st.volume) > parseFloat(st.avgVol) * 1.3;
+    if (live && live.volume_vs_avg) volHigh = parseFloat(live.volume_vs_avg) > 130;
     var mas = st.mas || {};
     var maBulls = 0;
     ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && st.price > mas[k]) maBulls++; });
 
-    if (sm) { score += 2; reasons.push("Smart Money: " + sm.signal.substring(0, 40)); }
-    if (isGreenOnRed) { score += 2; reasons.push("GREEN on red day (counter-trend)"); }
-    if (volHigh) { score++; reasons.push("Vol above average"); }
+    var action = live ? live.action : sig.composite;
+
+    if (sm) { score += 2; reasons.push("Smart Money: " + (sm.signal || sm.description || sm.type).substring(0, 50) + (hasLiveIntel ? " (live)" : "")); }
+    if (isGreenOnRed) { score += 2; reasons.push("GREEN on red day"); }
+    if (volHigh) { score++; reasons.push("Vol above avg" + (live && live.volume_vs_avg ? " " + live.volume_vs_avg + " (live)" : "")); }
     if (maBulls >= 3) { score++; reasons.push(maBulls + "/5 MAs bullish"); }
-    if (sig.composite === "Buy" || sig.composite === "Strong Buy") { score++; reasons.push("Signal: " + sig.composite); }
+    if (action === "Buy" || action === "Strong Buy") { score++; reasons.push("Signal: " + action + (live ? " (live)" : "")); }
 
     if (score >= 3 && (sm || isGreenOnRed)) {
       reasons.push(item.index);
@@ -755,19 +856,32 @@ function scanStrategies(allIndexes, macro, smartMoney, lc) {
     }
   });
 
-  // STRATEGY 3: Macro Rotation - ride sector flows from ALL indexes
+  // Also add live smart money tickers not in our universe
+  if (hasLiveIntel && intel.smartMoney) {
+    intel.smartMoney.forEach(function(sm) {
+      if (!sm.ticker || seen[sm.ticker]) return;
+      var isBull = sm.type === "Accumulation" || sm.type === "Upgrade" || sm.type === "Insider Buy";
+      if (isBull) {
+        var score = 3;
+        var reasons = ["LIVE: " + (sm.signal || sm.description || sm.type)];
+        score++; reasons.push("Smart Money accumulation (live)");
+        results.smartFollow.push({ ticker: sm.ticker, name: sm.ticker, price: 0, change: 0, score: Math.min(score, 7), reasons: reasons, color: sm.color || "#00ff88", sector: "Live Signal", index: "LIVE" });
+      }
+    });
+  }
+
+  // STRATEGY 3: Macro Rotation
   var rotationSignals = [];
   allFlows.forEach(function(f) {
-    var flowNum = parseFloat(f.flow.replace(/[^0-9.]/g, "")) || 0;
-    if (flowNum >= 1.0) {
+    var flowNum = parseFloat((f.flow || "0").replace(/[^0-9.]/g, "")) || 0;
+    if (flowNum >= 0.5) {
       var instConfirm = 0;
       allInstitutions.forEach(function(inv) {
-        var move = inv.move.toLowerCase();
-        if (move.indexOf("energy") >= 0 || move.indexOf("defensive") >= 0 || move.indexOf("value") >= 0 || move.indexOf("rotate") >= 0 || move.indexOf("shift") >= 0 || move.indexOf("real asset") >= 0) instConfirm++;
+        var move = (inv.move || inv.description || "").toLowerCase();
+        if (move.indexOf("energy") >= 0 || move.indexOf("defensive") >= 0 || move.indexOf("value") >= 0 || move.indexOf("rotate") >= 0 || move.indexOf("shift") >= 0 || move.indexOf("real asset") >= 0 || move.indexOf("inflow") >= 0 || move.indexOf("outflow") >= 0) instConfirm++;
       });
-      // Cap institutional confirmation at 5
       if (instConfirm > 5) instConfirm = 5;
-      rotationSignals.push({ from: f.from, to: f.to, flow: f.flow, flowNum: flowNum, drivers: f.drivers, instConfirm: instConfirm, label: f.label });
+      rotationSignals.push({ from: f.from, to: f.to, flow: f.flow || "$?", flowNum: flowNum, drivers: f.drivers || [], instConfirm: instConfirm, label: f.label || f.description || "" });
     }
   });
 
@@ -777,17 +891,25 @@ function scanStrategies(allIndexes, macro, smartMoney, lc) {
     allStocks.forEach(function(item) {
       var st = item.stock;
       var sn = item.sectorName.toLowerCase();
-      var match = sn.indexOf(toSector.split("/")[0].trim()) >= 0 || toSector.indexOf(sn.split(" ")[0]) >= 0;
-      if (match && st.rsi < 70 && !rotSeen[st.ticker]) {
+      var secWords = sn.split(" ");
+      var toWords = toSector.split(/[\s\/]+/);
+      var match = false;
+      toWords.forEach(function(tw) { secWords.forEach(function(sw) { if (tw.length > 2 && sw.length > 2 && sw.indexOf(tw) >= 0) match = true; }); });
+      if (!match) match = sn.indexOf(toSector.split("/")[0].trim()) >= 0 || toSector.indexOf(sn.split(" ")[0]) >= 0;
+
+      var rsi = st.rsi || 50;
+      var live = liveSignals[st.ticker];
+      if (live && live.rsi) rsi = live.rsi;
+
+      if (match && rsi < 70 && !rotSeen[st.ticker]) {
         rotSeen[st.ticker] = true;
         var score = 0;
-        var reasons = ["Flow: " + rot.from + " -> " + rot.to + " (" + rot.flow + ")"];
-        // Score: flow size (1-2), inst confirm (1-2), RSI room (0-1), green on red (0-1), MA alignment (0-1)
+        var reasons = ["Flow: " + rot.from + " -> " + rot.to + " (" + rot.flow + ")" + (hasLiveIntel ? " (live)" : "")];
         if (rot.flowNum >= 4) { score += 2; reasons.push("Massive flow $" + rot.flowNum + "B"); }
         else { score += 1; reasons.push("Flow $" + rot.flowNum + "B"); }
         if (rot.instConfirm >= 3) { score += 2; reasons.push(rot.instConfirm + " institutions confirm"); }
         else if (rot.instConfirm >= 1) { score += 1; reasons.push(rot.instConfirm + " institution confirms"); }
-        if (st.rsi < 50) { score++; reasons.push("RSI " + st.rsi + " - room to run"); }
+        if (rsi < 50) { score++; reasons.push("RSI " + rsi + (live && live.rsi ? " (live)" : "")); }
         if (lc(st.ticker, st.change) > 0 && worstPct < 0) { score++; reasons.push("Green on red day"); }
         var mas2 = st.mas || {};
         var mab = 0;
@@ -795,7 +917,7 @@ function scanStrategies(allIndexes, macro, smartMoney, lc) {
         if (mab >= 2) { score++; reasons.push(mab + "/3 key MAs bullish"); }
         rot.drivers.forEach(function(dr) { reasons.push("Driver: " + dr); });
         reasons.push(item.index);
-        results.rotation.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: st.rsi, index: item.index });
+        results.rotation.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: rsi, index: item.index });
       }
     });
   });
@@ -1035,7 +1157,7 @@ function GalaxyView(props) {
   });
 
   // Strategy Scanner
-  var scanResults = scanStrategies(INDEXES, MACRO, SMART_MONEY, lc);
+  var scanResults = scanStrategies(INDEXES, MACRO, SMART_MONEY, lc, liveIntel);
 
   function buildStrategyCard(strat, title, icon, desc, color, items) {
     var active = items.length > 0;
@@ -1051,23 +1173,32 @@ function GalaxyView(props) {
     var descEl = h("div", { style: { fontSize: 12, color: "#6a7a94", lineHeight: 1.5, padding: "8px 10px", background: "#0a1020", borderRadius: 6, marginBottom: 10 } }, desc);
 
     var stockRows = items.map(function(item, i) {
-      return h("div", { key: item.ticker + i, style: { background: "#0a1020", border: "1px solid #141f35", borderRadius: 8, padding: 10, marginBottom: 6 } },
+      var is7 = Math.min(item.score, 7) === 7;
+      var isLiveSignal = item.index === "LIVE" || (item.reasons && item.reasons.some(function(r) { return r.indexOf("(live)") >= 0 || r.indexOf("LIVE") >= 0; }));
+      var cardBorder = is7 ? "2px solid " + color : "1px solid " + (isLiveSignal ? "#e040fb33" : "#141f35");
+      var cardBg = is7 ? "#0c1428" : "#0a1020";
+      var cardShadow = is7 ? "0 0 20px " + color + "30, 0 0 40px " + color + "15" : "none";
+
+      return h("div", { key: item.ticker + i, className: is7 ? "pulse-card" : "", style: { background: cardBg, border: cardBorder, borderRadius: 10, padding: 12, marginBottom: 8, boxShadow: cardShadow, position: "relative", overflow: "hidden" } },
+        is7 ? h("div", { style: { position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, " + color + ", transparent)", animation: "shimmer 2s infinite" } }) : null,
         h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
-          h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-            h("span", { style: { fontSize: 16, fontWeight: 800, color: item.color, fontFamily: mono } }, item.ticker),
+          h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+            h("span", { style: { fontSize: is7 ? 18 : 16, fontWeight: 800, color: is7 ? "#fff" : item.color, fontFamily: mono, textShadow: is7 ? "0 0 10px " + color : "none" } }, item.ticker),
             h("span", { style: { fontSize: 12, color: "#6a7a94" } }, item.name),
             h("span", { style: { fontSize: 10, color: "#4a5b7a" } }, item.sector),
-            item.index ? h("span", { style: { fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "#1a2744", color: "#5a8bfa", fontFamily: mono, fontWeight: 700 } }, item.index === "DOW" ? "DJIA" : item.index === "SPX" ? "S&P" : "NDX") : null
+            item.index ? h("span", { style: { fontSize: 9, padding: "1px 5px", borderRadius: 4, background: item.index === "LIVE" ? "#e040fb22" : "#1a2744", color: item.index === "LIVE" ? "#e040fb" : "#5a8bfa", fontFamily: mono, fontWeight: 700 } }, item.index === "DOW" ? "DJIA" : item.index === "SPX" ? "S&P" : item.index === "LIVE" ? "LIVE" : "NDX") : null,
+            isLiveSignal && item.index !== "LIVE" ? h("span", { style: { fontSize: 8, color: "#e040fb", fontWeight: 700 } }, "LIVE DATA") : null
           ),
           h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-            h("span", { style: { fontSize: 14, fontWeight: 700, color: "#e0e6f0", fontFamily: mono } }, "$" + item.price.toLocaleString()),
-            h(Chg, { v: item.change, sz: 12 }),
-            h("div", { style: { padding: "2px 8px", borderRadius: 10, background: color + "20", border: "1px solid " + color + "44", color: color, fontSize: 11, fontWeight: 700, fontFamily: mono } }, Math.min(item.score, 7) + "/7")
+            item.price > 0 ? h("span", { style: { fontSize: 14, fontWeight: 700, color: "#e0e6f0", fontFamily: mono } }, "$" + item.price.toLocaleString()) : null,
+            item.price > 0 ? h(Chg, { v: item.change, sz: 12 }) : null,
+            h("div", { className: is7 ? "pulse-badge" : "", style: { padding: is7 ? "4px 12px" : "2px 8px", borderRadius: 10, background: is7 ? color : color + "20", border: is7 ? "none" : "1px solid " + color + "44", color: is7 ? "#000" : color, fontSize: is7 ? 13 : 11, fontWeight: 800, fontFamily: mono, animation: is7 ? "pulse-glow 1.5s ease-in-out infinite" : "none" } }, Math.min(item.score, 7) + "/7")
           )
         ),
         h("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 } },
           item.reasons.map(function(r, j) {
-            return h("span", { key: j, style: { fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#141f35", color: "#8892a4", fontFamily: mono, lineHeight: 1.6 } }, r);
+            var isLiveReason = r.indexOf("(live)") >= 0 || r.indexOf("LIVE") >= 0;
+            return h("span", { key: j, style: { fontSize: 10, padding: "2px 6px", borderRadius: 4, background: isLiveReason ? "#e040fb15" : "#141f35", color: isLiveReason ? "#e040fb" : "#8892a4", fontFamily: mono, lineHeight: 1.6, border: isLiveReason ? "1px solid #e040fb33" : "none" } }, r);
           })
         )
       );
@@ -1077,8 +1208,13 @@ function GalaxyView(props) {
   }
 
   var scannerContent = h("div", null,
+    scanResults.isLiveIntel ? h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", background: "#e040fb12", border: "1px solid #e040fb33", borderRadius: 8 } },
+      h("div", { style: { width: 8, height: 8, borderRadius: "50%", background: "#e040fb", animation: "pulse-glow 1.5s ease-in-out infinite" } }),
+      h("span", { style: { fontSize: 12, color: "#e040fb", fontWeight: 700 } }, "LIVE INTELLIGENCE ACTIVE"),
+      h("span", { style: { fontSize: 10, color: "#6a7a94" } }, "Using real-time data from Claude AI")
+    ) : null,
     h("div", { style: { fontSize: 11, color: "#e040fb", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 } }, "Automated Strategy Scanner"),
-    h("div", { style: { fontSize: 12, color: "#6a7a94", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " unique stocks across DJIA, S&P 500, and NASDAQ. Scores 0-7 based on conditions met. Higher = stronger signal."),
+    h("div", { style: { fontSize: 12, color: "#6a7a94", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " stocks across DJIA, S&P 500, and NASDAQ. " + (scanResults.isLiveIntel ? "Live smart money, flows, institutional data, and AI scanner signals active." : "Using snapshot data. Click Fetch AI Intel for live signals.")),
     buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names dragged down by panic. Requires: F&G below 30, composite Sell but above 200-day MA, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current. These are temporary fear plays in strong companies.", "#00d4ff", scanResults.fear),
     buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation signals. Requires: Smart Money tab accumulation OR green on a red day, volume above average, 3+ MAs bullish, composite Buy signal. You are piggybacking on conviction buying by large desks.", "#00ff88", scanResults.smartFollow),
     buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. Requires: $1B+ flow into sector, multiple institutions confirming the rotation, RSI below 70 (room to run). You profit from money movement between sectors regardless of index direction.", "#ffd700", scanResults.rotation),
@@ -1104,20 +1240,23 @@ function GalaxyView(props) {
           h("span", { style: { color: displayPct >= 0 ? "#00ff88" : "#ff4d4d", fontSize: 16, fontWeight: 700, fontFamily: mono } }, displaySub),
           h("span", { style: { fontSize: 12, color: "#5a6b8a", marginLeft: 8 } }, displayInfo)
         ),
-        h("div", { style: { background: "#0a1020", border: "1px solid #141f35", borderRadius: 10, padding: "8px 14px", textAlign: "center" } },
-          h("div", { style: { fontSize: 10, color: "#5a6b8a", fontFamily: mono } }, "FEAR & GREED"),
+        h("div", { style: { background: "#0a1020", border: "1px solid " + (liveIntel && liveIntel.fearGreed ? "#e040fb33" : "#141f35"), borderRadius: 10, padding: "8px 14px", textAlign: "center" } },
+          h("div", { style: { fontSize: 10, color: liveIntel && liveIntel.fearGreed ? "#e040fb" : "#5a6b8a", fontFamily: mono } }, "FEAR & GREED"),
           h("div", { style: { width: 80, height: 6, borderRadius: 3, background: "linear-gradient(to right,#ff2020,#ff6b35,#ffd700,#00dd66,#00ff88)", position: "relative", margin: "6px 0" } },
-            h("div", { style: { position: "absolute", left: MACRO.fearGreed + "%", top: "50%", transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: "#fff", border: "2px solid #ff6b35" } })
+            h("div", { style: { position: "absolute", left: (liveIntel && liveIntel.fearGreed ? liveIntel.fearGreed : MACRO.fearGreed) + "%", top: "50%", transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: "#fff", border: "2px solid " + ((liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 45 ? "#ff6b35" : "#ffd700") } })
           ),
-          h("div", { style: { fontSize: 16, fontWeight: 800, color: "#ff6b35", fontFamily: mono } }, MACRO.fearGreed),
-          h("div", { style: { fontSize: 11, color: "#ff6b35" } }, MACRO.fearLabel),
-          isLive ? h("div", { style: { fontSize: 8, color: "#4a5b7a", marginTop: 2 } }, "(snapshot)") : null
+          h("div", { style: { fontSize: 16, fontWeight: 800, color: (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 45 ? "#ff6b35" : "#ffd700", fontFamily: mono } }, liveIntel && liveIntel.fearGreed ? liveIntel.fearGreed : MACRO.fearGreed),
+          h("div", { style: { fontSize: 11, color: (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : "#ff6b35" } }, liveIntel && liveIntel.fearLabel ? liveIntel.fearLabel : MACRO.fearLabel),
+          liveIntel && liveIntel.fearGreed ? h("div", { style: { fontSize: 8, color: "#e040fb", marginTop: 2 } }, "LIVE") : null
         )
       )
     ),
     h("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, justifyContent: "center" } }, macroTiles),
-    h("div", { style: { background: "#0a1020", border: "1px solid #1a2235", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 13, color: "#8892a4", lineHeight: 1.5 } },
-      h("span", { style: { color: "#ffd700", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 } }, isLive ? "Snapshot Summary " : "Summary "), d.narrative),
+    h("div", { style: { background: "#0a1020", border: "1px solid " + (liveIntel && liveIntel.narrative ? "#e040fb33" : "#1a2235"), borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 13, color: "#8892a4", lineHeight: 1.5 } },
+      h("span", { style: { color: liveIntel && liveIntel.narrative ? "#e040fb" : "#ffd700", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 } }, liveIntel && liveIntel.narrative ? "Live Summary " : "Summary "),
+      liveIntel && liveIntel.narrative ? liveIntel.narrative : d.narrative,
+      liveIntel && liveIntel.headline ? h("div", { style: { marginTop: 6, fontSize: 12, color: "#e040fb", fontWeight: 600 } }, liveIntel.headline) : null
+    ),
     h("div", { style: { display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" } }, tabs),
     tabContent
   );
@@ -1356,7 +1495,7 @@ export default function MarketUniverse() {
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
         h("div", null,
           h("div", { style: { fontSize: 11, color: "#5a6b8a", textTransform: "uppercase", letterSpacing: 2, fontFamily: mono } }, "Market Universe Explorer"),
-          h("div", { style: { display: "inline-block", fontSize: 9, color: "#e040fb", background: "#e040fb15", border: "1px solid #e040fb33", borderRadius: 4, padding: "1px 6px", fontFamily: mono, marginTop: 2 } }, "v14"),
+          h("div", { style: { display: "inline-block", fontSize: 9, color: "#e040fb", background: "#e040fb15", border: "1px solid #e040fb33", borderRadius: 4, padding: "1px 6px", fontFamily: mono, marginTop: 2 } }, "v15"),
           h("div", { style: { fontSize: 20, fontWeight: 800, color: "#e0e6f0", marginTop: 2 } }, title)
         ),
         h("div", { style: { fontSize: 10, color: isLive ? "#00ff88" : "#4a5b7a", textAlign: "right", fontFamily: mono } }, dataLabel, h("br"), dataTime)
