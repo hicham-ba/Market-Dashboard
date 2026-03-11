@@ -739,7 +739,7 @@ function fetchAllIntelligence(onUpdate) {
 // STRATEGY SCANNER
 // ============================================================
 
-function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
+function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) {
   var intel = liveIntel || {};
   var hasLiveIntel = intel.timestamp && intel.timestamp.length > 0;
 
@@ -820,7 +820,8 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
     var analyst = live ? (live.analyst || st.analystRating) : st.analystRating;
     var isQuality = analyst === "Buy" || analyst === "Strong Buy";
     var instHigh = parseFloat(st.instOwn) >= 65;
-    var targetUpside = st.priceTarget > 0 ? ((st.priceTarget - st.price) / st.price * 100) : 0;
+    var currentPrice = lp(st.ticker, st.price);
+    var targetUpside = st.priceTarget > 0 ? ((st.priceTarget - currentPrice) / currentPrice * 100) : 0;
     var rsi = live ? (live.rsi || st.rsi) : st.rsi;
 
     if (isFearEnv) { score++; reasons.push("F&G " + fearGreed + (hasLiveIntel ? " (live)" : "")); }
@@ -832,7 +833,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
 
     if (score >= 4 && isSellSignal && above200) {
       reasons.push(item.index);
-      results.fear.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, index: item.index });
+      results.fear.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, index: item.index });
     }
   });
 
@@ -879,7 +880,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
 
     if (score >= 3 && (sm || isGreenOnRed)) {
       reasons.push(item.index);
-      results.smartFollow.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, maBulls: maBulls, index: item.index });
+      results.smartFollow.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, maBulls: maBulls, index: item.index });
     }
   });
 
@@ -944,7 +945,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel) {
         if (mab >= 2) { score++; reasons.push(mab + "/3 key MAs bullish"); }
         rot.drivers.forEach(function(dr) { reasons.push("Driver: " + dr); });
         reasons.push(item.index);
-        results.rotation.push({ ticker: st.ticker, name: st.name, price: st.price, change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: rsi, index: item.index });
+        results.rotation.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: rsi, index: item.index });
       }
     });
   });
@@ -1184,7 +1185,7 @@ function GalaxyView(props) {
   });
 
   // Strategy Scanner
-  var scanResults = scanStrategies(INDEXES, MACRO, SMART_MONEY, lc, liveIntel);
+  var scanResults = scanStrategies(INDEXES, MACRO, SMART_MONEY, lc, liveIntel, lp);
 
   function buildStrategyCard(strat, title, icon, desc, color, items) {
     var active = items.length > 0;
