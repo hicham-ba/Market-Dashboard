@@ -686,7 +686,7 @@ function fetchAllIntelligence(onUpdate) {
   // 2. Sector Flows
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today (SPY, QQQ, XLE, XLF, TLT, XLK, XLV, etc)? Return ONLY a JSON object: {"flows":[{"from":"Sector losing money","to":"Sector gaining money","flow":"$X.XB estimated","label":"description of why this rotation is happening","drivers":["driver1","driver2"]}]} Include 4-6 major flows. Focus on today's actual movement. Do not include any citation tags or XML tags in your response.'
+      'Search for today\'s stock market sector rotation and money flows. Which sectors are seeing inflows vs outflows? What are the biggest ETF flows today (SPY, QQQ, XLE, XLF, TLT, XLK, XLV, etc)? Return ONLY a JSON object: {"flows":[{"from":"Sector losing money","to":"Sector gaining money","flow":"$X.XB estimated","label":"description of why this rotation is happening","drivers":["driver1","driver2"]}]} Include 4-6 major flows. Focus on today\'s actual movement. Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.flows) results.flows = parsed.flows;
