@@ -426,6 +426,22 @@ function getAllTickers(idxKey) {
   return tickers;
 }
 
+function getAllTickersAllIndexes() {
+  var tickers = [];
+  var seen = {};
+  Object.keys(INDEXES).forEach(function(idxKey) {
+    INDEXES[idxKey].sectors.forEach(function(sec) {
+      sec.stocks.forEach(function(st) {
+        if (!seen[st.ticker]) {
+          seen[st.ticker] = true;
+          tickers.push(st.ticker);
+        }
+      });
+    });
+  });
+  return tickers;
+}
+
 var INDEX_ETFS = { DOW: "DIA", SPX: "SPY", NDX: "QQQ" };
 
 // ETF proxies for macro indicators
@@ -481,7 +497,7 @@ function LiveDataPanel(props) {
 
   useEffect(function() {
     if (autoRefresh && connected && status !== "loading") {
-      intRef.current = setInterval(function() { doFetch(); }, 30000);
+      intRef.current = setInterval(function() { doFetch(); }, 90000);
     }
     return function() { if (intRef.current) clearInterval(intRef.current); };
   }, [autoRefresh, connected]);
@@ -497,7 +513,7 @@ function LiveDataPanel(props) {
         setStatus("idle"); setMsg("FINNHUB_KEY missing in Vercel env vars");
         return;
       }
-      mueLog("Server OK. Fetching " + getAllTickers(currentIdx).length + " stocks...");
+      mueLog("Server OK. Fetching all stocks across all indexes...");
       setMsg("Fetching...");
       setConnected(true);
       doFetchQuotes();
@@ -509,7 +525,7 @@ function LiveDataPanel(props) {
 
   function doFetchQuotes() {
 
-    var tickers = getAllTickers(currentIdx);
+    var tickers = getAllTickersAllIndexes();
     var extras = ["DIA", "SPY", "QQQ"].concat(MACRO_PROXY_SYMBOLS);
     var all = extras.concat(tickers);
     var seen = {}; var deduped = [];
@@ -547,7 +563,7 @@ function LiveDataPanel(props) {
             if (onUpdate) onUpdate(results);
           }
         });
-      }, i * 120);
+      }, i * 250);
     });
   }
 
@@ -558,7 +574,7 @@ function LiveDataPanel(props) {
   if (connected) {
     btns.push(h("button", { key: "r", onClick: function() { doFetch(); }, style: { background: "#00ff8812", border: "1px solid #00ff8833", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#00ff88", fontSize: 12, fontWeight: 700, fontFamily: mono } }, status === "loading" ? "Loading..." : "Refresh"));
     if (status === "done") {
-      btns.push(h("button", { key: "a", onClick: function() { setAutoRefresh(!autoRefresh); }, style: { background: autoRefresh ? "#00ff8815" : "#0a1020", border: "1px solid " + (autoRefresh ? "#00ff8844" : "#141f35"), borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: autoRefresh ? "#00ff88" : "#5a6b8a", fontSize: 11, fontWeight: 600, fontFamily: mono } }, autoRefresh ? "Auto: ON 30s" : "Auto: OFF"));
+      btns.push(h("button", { key: "a", onClick: function() { setAutoRefresh(!autoRefresh); }, style: { background: autoRefresh ? "#00ff8815" : "#0a1020", border: "1px solid " + (autoRefresh ? "#00ff8844" : "#141f35"), borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: autoRefresh ? "#00ff88" : "#5a6b8a", fontSize: 11, fontWeight: 600, fontFamily: mono } }, autoRefresh ? "Auto: ON 90s" : "Auto: OFF"));
     }
   }
 
@@ -1232,7 +1248,7 @@ function GalaxyView(props) {
       );
     });
 
-    return h("div", { style: { background: "#0c1424", border: "1px solid " + (active ? color + "30" : "#141f35"), borderRadius: 14, padding: 16, marginBottom: 14 } }, header, descEl, stockRows.length > 0 ? stockRows : h("div", { style: { fontSize: 12, color: "#4a5b7a", padding: "10px 0", textAlign: "center" } }, "No stocks meet all criteria for this strategy right now."));
+    return h("div", { style: { background: "#0c1424", border: "1px solid " + (active ? color + "30" : "#141f35"), borderRadius: 14, padding: 16, marginBottom: 14 } }, header, descEl, stockRows.length > 0 ? stockRows : h("div", { style: { fontSize: 12, color: "#4a5b7a", padding: "10px 0", textAlign: "center" } }, "No stocks scoring 5/7 or higher for this strategy right now."));
   }
 
   var scannerContent = h("div", null,
@@ -1242,10 +1258,10 @@ function GalaxyView(props) {
       h("span", { style: { fontSize: 10, color: "#6a7a94" } }, "Using real-time data from Claude AI")
     ) : null,
     h("div", { style: { fontSize: 11, color: "#e040fb", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 } }, "Automated Strategy Scanner"),
-    h("div", { style: { fontSize: 12, color: "#6a7a94", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " stocks across DJIA, S&P 500, and NASDAQ. " + (scanResults.isLiveIntel ? "Live smart money, flows, institutional data, and AI scanner signals active." : "Using snapshot data. Click Fetch AI Intel for live signals.")),
-    buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names dragged down by panic. Requires: F&G below 30, composite Sell but above 200-day MA, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current. These are temporary fear plays in strong companies.", "#00d4ff", scanResults.fear),
-    buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation signals. Requires: Smart Money tab accumulation OR green on a red day, volume above average, 3+ MAs bullish, composite Buy signal. You are piggybacking on conviction buying by large desks.", "#00ff88", scanResults.smartFollow),
-    buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. Requires: $1B+ flow into sector, multiple institutions confirming the rotation, RSI below 70 (room to run). You profit from money movement between sectors regardless of index direction.", "#ffd700", scanResults.rotation),
+    h("div", { style: { fontSize: 12, color: "#6a7a94", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " stocks across DJIA, S&P 500, and NASDAQ. Showing scores 5/7 and above only. " + (scanResults.isLiveIntel ? "Live intelligence active." : "Using snapshot data. Click Fetch AI Intel for live signals.")),
+    buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names dragged down by panic. Requires: F&G below 30, composite Sell but above 200-day MA, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current.", "#00d4ff", scanResults.fear.filter(function(x) { return x.score >= 5; })),
+    buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation signals. Requires: Smart Money accumulation OR green on a red day, volume above average, 3+ MAs bullish, composite Buy signal.", "#00ff88", scanResults.smartFollow.filter(function(x) { return x.score >= 5; })),
+    buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. Requires: significant flow into sector, institutional confirmation, RSI below 70. You profit from money movement between sectors.", "#ffd700", scanResults.rotation.filter(function(x) { return x.score >= 5; })),
     h("div", { style: { marginTop: 8, padding: 10, background: "#0a1020", borderRadius: 8, border: "1px solid #1a2235", fontSize: 11, color: "#4a5b7a", lineHeight: 1.5, textAlign: "center" } }, "Disclaimer: These are educational strategy frameworks, not investment advice. Signals are estimated from available data. Always do your own research and consider consulting a financial advisor before trading.")
   );
 
