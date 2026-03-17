@@ -492,7 +492,12 @@ function LiveDataPanel(props) {
     // Listen for custom event from HTML button
     function onConnect() { doFetch(); }
     if (typeof window !== "undefined") window.__mue_fetch = onConnect;
-    return function() { clearInterval(t); };
+    // Auto-fetch on mount after a short delay to let React settle
+    var autoStart = setTimeout(function() {
+      mueLog("Auto-fetching prices...");
+      doFetch();
+    }, 1500);
+    return function() { clearInterval(t); clearTimeout(autoStart); };
   }, []);
 
   useEffect(function() {
@@ -550,6 +555,7 @@ function LiveDataPanel(props) {
             var count = Object.keys(results).length;
             setMsg(count + " quotes loaded" + (errors > 0 ? ", " + errors + " errors" : ""));
             mueLog("Done: " + count + " quotes, " + errors + " errors");
+            if (!autoRefresh) setAutoRefresh(true);
             if (onUpdate) onUpdate(results);
           }
         }).catch(function(err) {
@@ -1484,12 +1490,17 @@ export default function MarketUniverse() {
     setLiveIntel(intel);
   }
 
-  // Register intel fetch bridge
+  // Register intel fetch bridge and auto-fetch on mount
   useEffect(function() {
     if (typeof window !== "undefined") {
       window.__mue_intel = function() {
         fetchAllIntelligence(handleIntelUpdate);
       };
+      // Auto-fetch intel after a short delay to let prices start first
+      var autoIntel = setTimeout(function() {
+        fetchAllIntelligence(handleIntelUpdate);
+      }, 3000);
+      return function() { clearTimeout(autoIntel); };
     }
   }, []);
 
