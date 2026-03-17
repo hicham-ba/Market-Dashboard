@@ -772,7 +772,10 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
 
   Object.keys(allIndexes).forEach(function(idxKey) {
     var d = allIndexes[idxKey];
-    if (d.changePct < worstPct) worstPct = d.changePct;
+    // Use live ETF change when available, otherwise static
+    var etfSym = idxKey === "DOW" ? "DIA" : idxKey === "SPX" ? "SPY" : "QQQ";
+    var idxChange = lp(etfSym, 0) > 0 ? lc(etfSym, d.changePct) : d.changePct;
+    if (idxChange < worstPct) worstPct = idxChange;
     d.sectors.forEach(function(sec) {
       sec.stocks.forEach(function(st) {
         if (!seen[st.ticker]) {
@@ -1026,7 +1029,16 @@ function GalaxyView(props) {
   var displayPrice = liveETF ? "$" + liveQuotes[etfKey].price.toFixed(2) + " (ETF)" : d.close.toLocaleString();
   var displayPct = liveETF ? liveQuotes[etfKey].change : d.changePct;
   var displaySub = liveETF ? (displayPct >= 0 ? "+" : "") + displayPct.toFixed(2) + "%" : d.change.toLocaleString() + " (" + d.changePct + "%)";
-  var displayInfo = isLive ? "Live | " + d.short : getTodayShort() + " | " + d.greenCount + "/" + d.components + " green";
+  // Calculate live green count when connected
+  var liveGreen = 0;
+  var liveTotal = 0;
+  if (isLive) {
+    d.sectors.forEach(function(sec) { sec.stocks.forEach(function(st) {
+      liveTotal++;
+      if (liveQuotes[st.ticker] && liveQuotes[st.ticker].change >= 0) liveGreen++;
+    }); });
+  }
+  var displayInfo = isLive ? "Live | " + liveGreen + "/" + liveTotal + " green" : getTodayShort() + " | " + d.greenCount + "/" + d.components + " green";
 
   // Macro tiles - overlay live proxy data when available
   var macroTiles = MACRO_TILES.map(function(m) {
@@ -1090,13 +1102,25 @@ function GalaxyView(props) {
       var ch = lc(st.ticker, st.change);
       return h("span", { key: st.ticker, style: { fontSize: 11, padding: "2px 5px", borderRadius: 3, background: ch >= 0 ? "#00ff8810" : "#ff4d4d10", color: ch >= 0 ? "#00ff88" : "#ff4d4d", fontFamily: mono, fontWeight: 600 } }, st.ticker + (ch >= 0 ? "+" : "") + ch.toFixed(1) + "%");
     });
+    // Generate live sector summary when connected
+    var sectorDesc = s.description;
+    if (isLive) {
+      var greenStocks = 0; var bestTk = ""; var bestCh = -999; var worstTk = ""; var worstCh = 999;
+      s.stocks.forEach(function(st2) {
+        var ch2 = lc(st2.ticker, st2.change);
+        if (ch2 >= 0) greenStocks++;
+        if (ch2 > bestCh) { bestCh = ch2; bestTk = st2.ticker; }
+        if (ch2 < worstCh) { worstCh = ch2; worstTk = st2.ticker; }
+      });
+      sectorDesc = greenStocks + "/" + s.stocks.length + " green. " + bestTk + " leads (" + (bestCh >= 0 ? "+" : "") + bestCh.toFixed(1) + "%), " + worstTk + " lags (" + worstCh.toFixed(1) + "%). Avg: " + (avg >= 0 ? "+" : "") + avg.toFixed(2) + "%";
+    }
     return h("div", { key: s.name, onClick: function() { onSelect(s); }, onMouseEnter: function() { setHov(i); }, onMouseLeave: function() { setHov(null); },
       style: { background: hov === i ? "#111d35" : "#0a1223", border: "1px solid " + (hov === i ? s.color + "44" : "#141f35"), borderRadius: 12, padding: 14, cursor: "pointer", transition: "all .2s", boxShadow: hov === i ? "0 0 18px " + s.glow : "none" } },
       h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4 } },
         h("span", { style: { fontSize: 15, fontWeight: 700, color: "#e0e6f0" } }, s.name),
         h(Chg, { v: avg, sz: 15 })
       ),
-      h("div", { style: { fontSize: 12, color: "#6a7a94", lineHeight: 1.45, marginBottom: 8, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } }, s.description),
+      h("div", { style: { fontSize: 12, color: isLive ? "#8892a4" : "#6a7a94", lineHeight: 1.45, marginBottom: 8, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } }, sectorDesc),
       h("div", { style: { display: "flex", gap: 4, flexWrap: "wrap" } }, tickers)
     );
   });
@@ -1340,7 +1364,24 @@ function SectorView(props) {
   var avg = sector.stocks.reduce(function(a, b) { return a + lc(b.ticker, b.change); }, 0) / sector.stocks.length;
 
   var cards = sector.stocks.map(function(st, i) {
-    var metrics = [["Idx Wt", st.idxWeight], ["P/E", st.pe], ["RSI", st.rsi], ["Short", st.shortInt]].map(function(pair) {
+    var currentPrice = lp(st.ticker, st.price);
+    var currentChange = lc(st.ticker, st.change);
+    // Derive live sentiment from change
+    var liveSentiment = currentChange > 1 ? "Bullish" : currentChange > 0 ? "Mild Bull" : currentChange > -1 ? "Mild Bear" : "Bearish";
+    var showSentiment = isLive && liveQuotes[st.ticker] ? liveSentiment : st.sentiment;
+    // Derive live composite from MA alignment
+    var mas = st.mas || {};
+    var maBulls = 0;
+    ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && currentPrice > mas[k]) maBulls++; });
+    var liveComposite = maBulls >= 4 ? "Buy" : maBulls >= 3 ? "Hold" : maBulls >= 1 ? "Sell" : "Strong Sell";
+    var showComposite = isLive && liveQuotes[st.ticker] ? liveComposite : (st.signals ? st.signals.composite : "Hold");
+    // Recalculate RSI-like indicator from price vs MA200 distance
+    var liveRSI = mas.sma200 ? Math.round(50 + ((currentPrice - mas.sma200) / mas.sma200) * 200) : st.rsi;
+    if (liveRSI > 100) liveRSI = 100;
+    if (liveRSI < 0) liveRSI = 0;
+    var showRSI = isLive && liveQuotes[st.ticker] ? liveRSI : st.rsi;
+
+    var metrics = [["Idx Wt", st.idxWeight], ["P/E", st.pe], ["RSI", showRSI], ["Short", st.shortInt]].map(function(pair) {
       var l = pair[0], v = pair[1];
       var c = l === "RSI" ? (v > 70 ? "#ffd700" : v < 35 ? "#ff4d4d" : "#bcc6d4") : l === "Idx Wt" ? sector.color : "#bcc6d4";
       return h("div", { key: l, style: { display: "flex", justifyContent: "space-between" } },
@@ -1365,8 +1406,9 @@ function SectorView(props) {
       ),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 10px", fontSize: 12, margin: "6px 0" } }, metrics),
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 } },
-        h(Badge, { text: st.sentiment, color: sC(st.sentiment) }),
-        h(Badge, { text: st.signals ? st.signals.composite : "Hold", color: sigC(st.signals ? st.signals.composite : "Hold") })
+        h(Badge, { text: showSentiment, color: sC(showSentiment) }),
+        h(Badge, { text: showComposite, color: sigC(showComposite) }),
+        isLive && liveQuotes[st.ticker] ? h("span", { style: { fontSize: 8, color: "#e040fb" } }, maBulls + "/5 MA") : null
       ),
       maPanel
     );
@@ -1397,12 +1439,36 @@ function StockView(props) {
   var price = lp(stock.ticker, stock.price);
   var change = lc(stock.ticker, stock.change);
   var sig = stock.signals || { composite: "Hold", score: 50 };
+  var mas = stock.mas || {};
+
+  // Derive live signal states from current price vs MAs
+  var maBullCount = 0;
+  ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && price > mas[k]) maBullCount++; });
+  var liveComposite = maBullCount >= 4 ? "Buy" : maBullCount >= 3 ? "Hold" : maBullCount >= 1 ? "Sell" : "Strong Sell";
+  var liveScore = maBullCount >= 4 ? 75 : maBullCount >= 3 ? 55 : maBullCount >= 2 ? 40 : 25;
+  var showComposite = isLive && liveQuotes[stock.ticker] ? liveComposite : (sig.composite || "Hold");
+  var showScore = isLive && liveQuotes[stock.ticker] ? liveScore : (sig.score || 50);
+
+  // Derive live SMA labels
+  function maLabel(key) {
+    if (!mas[key]) return sig[key] || "N/A";
+    return price > mas[key] ? "Above ($" + mas[key].toFixed(0) + ")" : "Below ($" + mas[key].toFixed(0) + ")";
+  }
+  var liveSentiment = change > 1 ? "Bullish" : change > 0 ? "Mild Bull" : change > -1 ? "Mild Bear" : "Bearish";
+  var showSentiment = isLive && liveQuotes[stock.ticker] ? liveSentiment : (stock.sentiment || "Neutral");
+
+  // Live RSI estimate from price vs SMA200
+  var liveRSI = mas.sma200 ? Math.round(50 + ((price - mas.sma200) / mas.sma200) * 200) : stock.rsi || 50;
+  if (liveRSI > 100) liveRSI = 100;
+  if (liveRSI < 0) liveRSI = 0;
+  var rsiVal = isLive && liveQuotes[stock.ticker] ? liveRSI : (stock.rsi || 50);
+
   var pctRange = stock.fiftyTwoHigh !== stock.fiftyTwoLow ? ((price - stock.fiftyTwoLow) / (stock.fiftyTwoHigh - stock.fiftyTwoLow)) * 100 : 50;
-  var volNum = parseFloat(stock.volume) || 0; var avgNum = parseFloat(stock.avgVol) || 1; var siNum = parseFloat(stock.shortInt) || 0; var rsiVal = stock.rsi || 50;
+  var volNum = parseFloat(stock.volume) || 0; var avgNum = parseFloat(stock.avgVol) || 1; var siNum = parseFloat(stock.shortInt) || 0;
   var cs = { background: "#0a1223", border: "1px solid #141f35", borderRadius: 12, padding: 16 };
   var hs2 = { fontSize: 12, fontWeight: 700, color: "#5a6b8a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 };
 
-  var sigItems = [["MACD", sig.macd || "N/A"], ["SMA 20", sig.sma20 || "N/A"], ["SMA 50", sig.sma50 || "N/A"], ["SMA 200", sig.sma200 || "N/A"]];
+  var sigItems = [["MACD", sig.macd || "N/A"], ["SMA 20", maLabel("sma20")], ["SMA 50", maLabel("sma50")], ["SMA 200", maLabel("sma200")]];
   var metricItems = [["Index Weight", stock.idxWeight || "N/A"], ["Market Cap", stock.marketCap || "N/A"], ["P/E", String(stock.pe != null ? stock.pe : "N/A")], ["Beta", String(stock.beta != null ? stock.beta : "N/A")], ["Div Yield", stock.divYield || "N/A"], ["Inst Own", stock.instOwn || "N/A"], ["Analyst", stock.analystRating || "Hold"], ["Target", "$" + (stock.priceTarget || "N/A")]];
 
   return h("div", { style: { padding: "14px 20px" } },
@@ -1422,9 +1488,9 @@ function StockView(props) {
     ),
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 } },
       // Signal gauge
-      h("div", { style: cs }, h("div", { style: hs2 }, "Composite Signal"), h(Gauge, { score: sig.score || 50, label: sig.composite || "Hold" }),
+      h("div", { style: cs }, h("div", { style: hs2 }, "Composite Signal"), h(Gauge, { score: showScore, label: showComposite }),
         h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 12 } },
-          sigItems.map(function(p) { var c2 = (p[1] === "Bullish" || p[1] === "Above") ? "#00ff88" : (p[1] === "Bearish" || p[1] === "Below") ? "#ff4d4d" : "#ffd700"; return h("div", { key: p[0], style: { display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, borderBottom: "1px solid #0e1830" } }, h("span", { style: { color: "#5a6b8a" } }, p[0]), h("span", { style: { color: c2, fontWeight: 600, fontFamily: mono } }, p[1])); })
+          sigItems.map(function(p) { var c2 = (p[1].indexOf("Above") >= 0 || p[1] === "Bullish") ? "#00ff88" : (p[1].indexOf("Below") >= 0 || p[1] === "Bearish") ? "#ff4d4d" : "#ffd700"; return h("div", { key: p[0], style: { display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, borderBottom: "1px solid #0e1830" } }, h("span", { style: { color: "#5a6b8a" } }, p[0]), h("span", { style: { color: c2, fontWeight: 600, fontFamily: mono } }, p[1])); })
         )
       ),
       // Metrics
@@ -1447,7 +1513,7 @@ function StockView(props) {
       ),
       // Sentiment
       h("div", { style: cs }, h("div", { style: hs2 }, "Sentiment & Flow"),
-        h("div", { style: { marginBottom: 10 } }, h("div", { style: { fontSize: 10, color: "#5a6b8a", textTransform: "uppercase", marginBottom: 3 } }, "Sentiment"), h(Badge, { text: stock.sentiment || "Neutral", color: sC(stock.sentiment || "Neutral") })),
+        h("div", { style: { marginBottom: 10 } }, h("div", { style: { fontSize: 10, color: "#5a6b8a", textTransform: "uppercase", marginBottom: 3 } }, "Sentiment"), h(Badge, { text: showSentiment, color: sC(showSentiment) })),
         h("div", { style: { marginBottom: 10 } }, h("div", { style: { fontSize: 10, color: "#5a6b8a", textTransform: "uppercase", marginBottom: 3 } }, "Options Flow"), h("div", { style: { fontSize: 12, color: "#bcc6d4", background: "#0e1830", padding: "7px 10px", borderRadius: 6 } }, stock.optionsFlow || "No data")),
         h("div", null, h("div", { style: { fontSize: 10, color: "#5a6b8a", textTransform: "uppercase", marginBottom: 3 } }, "Insider"), h("div", { style: { fontSize: 12, color: "#bcc6d4", background: "#0e1830", padding: "7px 10px", borderRadius: 6 } }, stock.insiderActivity || "No data"))
       ),
@@ -1555,11 +1621,47 @@ export default function MarketUniverse() {
   if (level === "sector" && sector) currentView = h(SectorView, { sector: sector, onStock: function(s) { nav("stock", sector, s); }, liveQuotes: liveQuotes, isLive: isLive });
   if (level === "stock" && stock && sector) currentView = h(StockView, { stock: stock, sectorColor: sector.color, liveQuotes: liveQuotes, isLive: isLive });
 
+  // Market mood colors based on SPY/overall performance
+  var mktChange = 0;
+  if (isLive && liveQuotes["SPY"] && liveQuotes["SPY"].change !== undefined) {
+    mktChange = liveQuotes["SPY"].change;
+  }
+  // Background tints: green when up, red when down, neutral when flat
+  var mktBg, mktPanel, mktBorder, mktGlow;
+  if (mktChange > 1.5) {
+    mktBg = "#031a0a"; mktPanel = "#0a1f12"; mktBorder = "#00ff8825"; mktGlow = "0 0 80px #00ff8808";
+  } else if (mktChange > 0.5) {
+    mktBg = "#041510"; mktPanel = "#0a1a14"; mktBorder = "#00ff8818"; mktGlow = "0 0 60px #00ff8806";
+  } else if (mktChange > 0) {
+    mktBg = "#050f0d"; mktPanel = "#0a1412"; mktBorder = "#00ff8810"; mktGlow = "none";
+  } else if (mktChange > -0.5) {
+    mktBg = "#060d1a"; mktPanel = "#0c1424"; mktBorder = "#1a274422"; mktGlow = "none";
+  } else if (mktChange > -1.5) {
+    mktBg = "#120a0c"; mktPanel = "#1a0e12"; mktBorder = "#ff4d4d18"; mktGlow = "0 0 60px #ff4d4d06";
+  } else {
+    mktBg = "#1a0608"; mktPanel = "#200a0e"; mktBorder = "#ff4d4d25"; mktGlow = "0 0 80px #ff4d4d08";
+  }
+
+  // Sync body and API bar to market mood
+  useEffect(function() {
+    if (typeof document !== "undefined") {
+      document.body.style.background = mktBg;
+      var bar = document.getElementById("api-bar");
+      if (bar) {
+        bar.style.background = mktChange > 0.5 ? "#0a1a12" : mktChange < -0.5 ? "#1a0a0c" : "#0a1223";
+        bar.style.borderBottomColor = mktChange > 0.5 ? "#00ff8822" : mktChange < -0.5 ? "#ff4d4d22" : "#1a2744";
+        bar.style.transition = "background 2s ease, border-color 2s ease";
+      }
+    }
+  });
+
   var dataLabel = isLive ? "LIVE DATA" : "REAL DATA";
   var dataTime = isLive ? getETNow() + " ET" : getTodayStr();
 
-  return h("div", { style: { background: "#060d1a", minHeight: "100vh", color: "#e0e6f0", fontFamily: "'Instrument Sans',-apple-system,sans-serif" } },
+  return h("div", { style: { background: mktBg, minHeight: "100vh", color: "#e0e6f0", fontFamily: "'Instrument Sans',-apple-system,sans-serif", transition: "background 2s ease", boxShadow: mktGlow } },
     h("link", { href: "https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&display=swap", rel: "stylesheet" }),
+    // Market mood bar
+    isLive ? h("div", { style: { height: 3, background: mktChange > 0.5 ? "linear-gradient(90deg, #00ff8800, #00ff88, #00ff8800)" : mktChange < -0.5 ? "linear-gradient(90deg, #ff4d4d00, #ff4d4d, #ff4d4d00)" : "linear-gradient(90deg, #ffd70000, #ffd700, #ffd70000)", transition: "background 2s ease" } }) : null,
     h(Stars, null),
     h("div", { style: { position: "relative", zIndex: 2, padding: "14px 20px 0" } },
       h("div", { style: { display: "flex", gap: 4, marginBottom: 10 } }, idxTabs),
