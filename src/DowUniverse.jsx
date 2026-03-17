@@ -635,7 +635,7 @@ function parseClaudeJSON(data) {
 function fetchAllIntelligence(onUpdate) {
   var logEl = typeof document !== "undefined" ? document.getElementById("intel-log") : null;
 
-  var results = { smartMoney: null, flows: null, institutions: null, narrative: null, scannerData: null, fearGreed: null, timestamp: "" };
+  var results = { smartMoney: null, flows: null, institutions: null, narrative: null, scannerData: null, fearGreed: null, vix: null, oil: null, gold: null, tenYear: null, tltPrice: null, nfp: null, unemployment: null, putCallRatio: null, dxy: null, headline: null, timestamp: "" };
   var done = 0;
   var total = 2;
 
@@ -649,16 +649,36 @@ function fetchAllIntelligence(onUpdate) {
     }
   }
 
-  // CALL 1: Smart Money + Flows + Institutions (combined)
+  // CALL 1: Smart Money + Flows + Institutions + Macro Data (combined)
   if (logEl) logEl.textContent = "Fetching market intelligence (1/2)...";
   fetchClaudeIntel(
-    'Search for today\'s stock market activity. I need three things in one JSON response. Return ONLY a JSON object: {"signals":[{"ticker":"XX","signal":"description","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}],"flows":[{"from":"Sector losing","to":"Sector gaining","flow":"$X.XB","label":"why","drivers":["driver1","driver2"]}],"institutions":[{"name":"Fund Name","aum":"$X.XT","move":"what they did","signal":"Risk-Off or Rotate or Defensive","color":"#hex"}]} For signals: find 8-10 unusual options, insider trades, or volume spikes from today. For flows: find 4-6 sector rotations. For institutions: find 6-8 major fund moves or ETF flows. No citation or XML tags.'
+    'Search for today\'s stock market activity and current market data. Return ONLY a JSON object: {"signals":[{"ticker":"XX","signal":"description","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}],"flows":[{"from":"Sector losing","to":"Sector gaining","flow":"$X.XB","label":"why","drivers":["driver1","driver2"]}],"institutions":[{"name":"Fund Name","aum":"$X.XT","move":"what they did","signal":"Risk-Off or Rotate or Defensive","color":"#hex"}],"macro":{"vix":number,"oil":number,"gold":number,"tenYear":number,"tltPrice":number,"nfp":"string like +200K","unemployment":"string like 4.4%","putCallRatio":number,"dxy":number}} For signals: 8-10 unusual options or insider trades today. For flows: 4-6 sector rotations. For institutions: 6-8 major fund moves. For macro: current VIX index level, WTI crude oil price per barrel, gold price per troy ounce, 10-year Treasury yield, TLT ETF price, latest nonfarm payrolls, unemployment rate, CBOE equity put/call ratio, US Dollar Index. No citation or XML tags.'
   ).then(function(data) {
     var parsed = parseClaudeJSON(data);
     if (parsed) {
       if (parsed.signals) results.smartMoney = parsed.signals;
       if (parsed.flows) results.flows = parsed.flows;
       if (parsed.institutions) results.institutions = parsed.institutions;
+      if (parsed.macro) {
+        results.vix = parsed.macro.vix || null;
+        results.oil = parsed.macro.oil || null;
+        results.gold = parsed.macro.gold || null;
+        results.tenYear = parsed.macro.tenYear || null;
+        results.tltPrice = parsed.macro.tltPrice || null;
+        results.nfp = parsed.macro.nfp || null;
+        results.unemployment = parsed.macro.unemployment || null;
+        results.putCallRatio = parsed.macro.putCallRatio || null;
+        results.dxy = parsed.macro.dxy || null;
+      }
+      // Also check if macro fields were returned at root level
+      if (!results.vix && parsed.vix) results.vix = parsed.vix;
+      if (!results.oil && parsed.oil) results.oil = parsed.oil;
+      if (!results.gold && parsed.gold) results.gold = parsed.gold;
+      if (!results.tenYear && parsed.tenYear) results.tenYear = parsed.tenYear;
+      if (!results.nfp && parsed.nfp) results.nfp = parsed.nfp;
+      if (!results.unemployment && parsed.unemployment) results.unemployment = parsed.unemployment;
+      if (!results.putCallRatio && parsed.putCallRatio) results.putCallRatio = parsed.putCallRatio;
+      if (!results.dxy && parsed.dxy) results.dxy = parsed.dxy;
     }
     checkDone();
   }).catch(function(e) {
@@ -666,26 +686,17 @@ function fetchAllIntelligence(onUpdate) {
     checkDone();
   });
 
-  // CALL 2: Market Summary + Fear & Greed + Scanner Signals (combined)
+  // CALL 2: Market Narrative + Fear & Greed + Scanner Stock Signals
   setTimeout(function() {
     if (logEl) logEl.textContent = "Fetching scanner intelligence (2/2)...";
     fetchClaudeIntel(
-      'Search for today\'s stock market data. I need two things in one JSON response. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary of today","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX index value as number","oil":"current WTI crude oil price per barrel as number","gold":"current gold price per troy ounce as number","tenYear":"current 10-year Treasury yield as number like 4.15","tltPrice":"TLT ETF price as number","nfp":"latest nonfarm payrolls number like +200K or -92K","unemployment":"current unemployment rate like 4.4%","putCallRatio":"current CBOE put/call ratio as number like 1.24","dxy":"US Dollar Index value as number","headline":"one line headline","stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For the market summary: what are Dow, S&P, Nasdaq doing today and why, plus CNN Fear and Greed value, plus all the macro values listed above. For stocks: find 15-20 with the strongest signals today. Mix buys and sells. No citation or XML tags.'
+      'Search for today\'s stock market summary and strongest stock signals. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","headline":"one line headline","stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For narrative: what are Dow, S&P, Nasdaq doing today and why, CNN Fear and Greed value. For stocks: find 15-20 with strongest signals today (unusual volume, analyst changes, insider trades, RSI extremes). Mix buys and sells. No citation or XML tags.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed) {
         results.narrative = parsed.narrative || null;
         results.fearGreed = parsed.fearGreed || null;
         results.fearLabel = parsed.fearLabel || null;
-        results.vix = parsed.vix || null;
-        results.oil = parsed.oil || null;
-        results.gold = parsed.gold || null;
-        results.tenYear = parsed.tenYear || null;
-        results.tltPrice = parsed.tltPrice || null;
-        results.nfp = parsed.nfp || null;
-        results.unemployment = parsed.unemployment || null;
-        results.putCallRatio = parsed.putCallRatio || null;
-        results.dxy = parsed.dxy || null;
         results.headline = parsed.headline || null;
         if (parsed.stocks) results.scannerData = parsed.stocks;
       }
@@ -984,7 +995,7 @@ function GalaxyView(props) {
   // Build macro tiles from intel data (real prices) + ETF fallback
   var tileData = [
     { l: "VIX", v: (liveIntel && liveIntel.vix) ? String(liveIntel.vix) : (isLive && liveQuotes["VIXY"] ? liveQuotes["VIXY"].price.toFixed(2) + " (VIXY)" : "--") },
-    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : "--" },
+    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : (isLive && liveQuotes["USO"] ? "$" + liveQuotes["USO"].price.toFixed(2) + " (USO)" : "--") },
     { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear) ? liveIntel.tenYear + "%" : "--", sub: (liveIntel && liveIntel.tltPrice) ? "TLT $" + parseFloat(liveIntel.tltPrice).toFixed(2) : (isLive && liveQuotes["TLT"] ? "TLT $" + liveQuotes["TLT"].price.toFixed(2) : "") },
     { l: "NFP", v: (liveIntel && liveIntel.nfp) ? String(liveIntel.nfp) : "--" },
     { l: "UNEMP", v: (liveIntel && liveIntel.unemployment) ? String(liveIntel.unemployment) : "--" },
