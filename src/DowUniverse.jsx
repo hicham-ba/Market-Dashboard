@@ -564,7 +564,22 @@ function fetchClaudeIntel(prompt) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt: prompt })
-  }).then(function(r) { return r.json(); });
+  }).then(function(r) {
+    if (!r.ok) {
+      return r.text().then(function(t) {
+        var logEl = typeof document !== "undefined" ? document.getElementById("intel-log") : null;
+        if (logEl) logEl.textContent = "Intel error: HTTP " + r.status + " - " + t.substring(0, 100);
+        return { error: "HTTP " + r.status, content: [] };
+      });
+    }
+    return r.json();
+  }).then(function(data) {
+    if (data && data.error) {
+      var logEl = typeof document !== "undefined" ? document.getElementById("intel-log") : null;
+      if (logEl) logEl.textContent = "API error: " + (data.error + " " + (data.detail || "")).substring(0, 100);
+    }
+    return data;
+  });
 }
 
 function stripCitations(str) {
