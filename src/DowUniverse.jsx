@@ -13,8 +13,10 @@ if (typeof document !== "undefined" && !document.getElementById("mue-animations"
   style.textContent = [
     "@keyframes pulse-glow { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }",
     "@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }",
-    ".pulse-card { animation: card-pulse 2s ease-in-out infinite; }",
-    "@keyframes card-pulse { 0%,100% { box-shadow: 0 0 15px rgba(224,64,251,0.1); } 50% { box-shadow: 0 0 30px rgba(224,64,251,0.25), 0 0 60px rgba(224,64,251,0.1); } }"
+    ".pulse-card { animation: card-pulse 2.5s ease-in-out infinite; }",
+    "@keyframes card-pulse { 0%,100% { box-shadow: 0 2px 12px rgba(147,51,234,0.1); } 50% { box-shadow: 0 4px 24px rgba(147,51,234,0.2), 0 0 40px rgba(147,51,234,0.08); } }",
+    "@keyframes green-pulse { 0%,100% { box-shadow: 0 2px 8px rgba(22,163,74,0.08); } 50% { box-shadow: 0 4px 20px rgba(22,163,74,0.18); } }",
+    "@keyframes red-pulse { 0%,100% { box-shadow: 0 2px 8px rgba(220,38,38,0.08); } 50% { box-shadow: 0 4px 20px rgba(220,38,38,0.18); } }"
   ].join("\n");
   document.head.appendChild(style);
 }
@@ -668,7 +670,7 @@ function fetchAllIntelligence(onUpdate) {
   setTimeout(function() {
     if (logEl) logEl.textContent = "Fetching scanner intelligence (2/2)...";
     fetchClaudeIntel(
-      'Search for today\'s stock market data. I need two things in one JSON response. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary of today","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX","oil":"current WTI oil price","headline":"one line headline","stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For the market summary: what are Dow, S&P, Nasdaq doing today and why, plus CNN Fear and Greed value. For stocks: find 15-20 with the strongest signals today (unusual volume, RSI extremes, analyst changes, insider trades). Mix buys and sells. No citation or XML tags.'
+      'Search for today\'s stock market data. I need two things in one JSON response. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary of today","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX index value as number","oil":"current WTI crude oil price per barrel as number","gold":"current gold price per troy ounce as number","tenYear":"current 10-year Treasury yield as number like 4.15","tltPrice":"TLT ETF price as number","nfp":"latest nonfarm payrolls number like +200K or -92K","unemployment":"current unemployment rate like 4.4%","putCallRatio":"current CBOE put/call ratio as number like 1.24","dxy":"US Dollar Index value as number","headline":"one line headline","stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For the market summary: what are Dow, S&P, Nasdaq doing today and why, plus CNN Fear and Greed value, plus all the macro values listed above. For stocks: find 15-20 with the strongest signals today. Mix buys and sells. No citation or XML tags.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed) {
@@ -677,6 +679,13 @@ function fetchAllIntelligence(onUpdate) {
         results.fearLabel = parsed.fearLabel || null;
         results.vix = parsed.vix || null;
         results.oil = parsed.oil || null;
+        results.gold = parsed.gold || null;
+        results.tenYear = parsed.tenYear || null;
+        results.tltPrice = parsed.tltPrice || null;
+        results.nfp = parsed.nfp || null;
+        results.unemployment = parsed.unemployment || null;
+        results.putCallRatio = parsed.putCallRatio || null;
+        results.dxy = parsed.dxy || null;
         results.headline = parsed.headline || null;
         if (parsed.stocks) results.scannerData = parsed.stocks;
       }
@@ -790,7 +799,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
     var rsi = live ? (live.rsi || st.rsi) : st.rsi;
 
     if (isFearEnv) { score++; reasons.push("F&G " + fearGreed + (hasLiveIntel ? " (live)" : "")); }
-    if (isSellSignal && above200) { score += 2; reasons.push(action + " but above 200-day ($" + (mas.sma200 || 0).toFixed(0) + ")"); }
+    if (isSellSignal && above200) { score += 2; reasons.push("Short-term dip (below fast MAs) but long-term uptrend intact (above 200-day $" + (mas.sma200 || 0).toFixed(0) + ")"); }
     if (isQuality) { score++; reasons.push("Analyst " + analyst + (live && live.analyst ? " (live)" : "")); }
     if (instHigh) { score++; reasons.push(st.instOwn + " inst owned"); }
     if (targetUpside >= 15) { score++; reasons.push("Target $" + st.priceTarget + " (+" + targetUpside.toFixed(0) + "%)"); }
@@ -972,50 +981,28 @@ function GalaxyView(props) {
   var displayInfo = isLive ? "Live | " + liveGreen + "/" + liveTotal + " green" : getTodayShort() + " | " + d.greenCount + "/" + d.components + " green";
 
   // Macro tiles - overlay live proxy data when available
-  var macroTiles = MACRO_TILES.map(function(m) {
-    var proxy = MACRO_PROXIES[m.l];
-    var hasLive = isLive && proxy && liveQuotes[proxy.symbol] && liveQuotes[proxy.symbol].price > 0;
-    var liveQ = hasLive ? liveQuotes[proxy.symbol] : null;
+  // Build macro tiles from intel data (real prices) + ETF fallback
+  var tileData = [
+    { l: "VIX", v: (liveIntel && liveIntel.vix) ? String(liveIntel.vix) : (isLive && liveQuotes["VIXY"] ? liveQuotes["VIXY"].price.toFixed(2) + " (VIXY)" : "--") },
+    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : "--" },
+    { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear) ? liveIntel.tenYear + "%" : "--", sub: (liveIntel && liveIntel.tltPrice) ? "TLT $" + parseFloat(liveIntel.tltPrice).toFixed(2) : (isLive && liveQuotes["TLT"] ? "TLT $" + liveQuotes["TLT"].price.toFixed(2) : "") },
+    { l: "NFP", v: (liveIntel && liveIntel.nfp) ? String(liveIntel.nfp) : "--" },
+    { l: "UNEMP", v: (liveIntel && liveIntel.unemployment) ? String(liveIntel.unemployment) : "--" },
+    { l: "P/C RATIO", v: (liveIntel && liveIntel.putCallRatio) ? String(liveIntel.putCallRatio) : "--" },
+    { l: "DXY", v: (liveIntel && liveIntel.dxy) ? String(liveIntel.dxy) : (isLive && liveQuotes["UUP"] ? "$" + liveQuotes["UUP"].price.toFixed(2) + " (UUP)" : "--") },
+    { l: "GOLD /oz", v: (liveIntel && liveIntel.gold) ? "$" + parseFloat(liveIntel.gold).toLocaleString() : (isLive && liveQuotes["GLD"] ? "$" + liveQuotes["GLD"].price.toFixed(2) + " (GLD)" : "--") },
+  ];
 
-    var displayVal = m.v;
-    var displayDelta = m.delta;
-    var displayCtx = m.ctx;
-    var trend = m.trend;
-
-    if (liveQ) {
-      var pct = liveQ.change;
-      trend = pct > 0.5 ? "up" : pct < -0.5 ? "down" : "flat";
-      displayDelta = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
-      displayCtx = "LIVE $" + liveQ.price.toFixed(2);
-      // For VIX proxy (VIXY), show the ETF price with context
-      if (m.l === "VIX") { displayVal = "$" + liveQ.price.toFixed(2); displayCtx = "VIXY ETF (live)"; }
-      else if (m.l === "OIL WTI") { displayVal = "$" + liveQ.price.toFixed(2); displayCtx = "USO ETF (live)"; }
-      else if (m.l === "GOLD") { displayVal = "$" + liveQ.price.toFixed(2); displayCtx = "GLD ETF (live)"; }
-      else if (m.l === "DXY") { displayVal = "$" + liveQ.price.toFixed(2); displayCtx = "UUP ETF (live)"; }
-      else if (m.l === "10Y") { displayVal = "$" + liveQ.price.toFixed(2); displayCtx = "TLT ETF (live)"; }
-    }
-
-    var ac = trend === "up" ? "#ff4d4d" : trend === "down" ? "#16a34a" : "#718096";
-    if (m.l === "OIL WTI" || m.l === "GOLD") ac = trend === "up" ? "#22c55e" : "#ff4d4d";
-    if (m.l === "UNEMP" || m.l === "P/C RATIO") ac = trend === "up" ? "#ff4d4d" : "#00ff88";
-    var arrow = trend === "up"
-      ? { display: "inline-block", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "7px solid " + ac }
-      : trend === "down"
-      ? { display: "inline-block", width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "7px solid " + ac }
-      : { display: "inline-block", width: 10, height: 2, borderRadius: 1, background: ac };
-
-    var tileBorder = hasLive ? "#00ff8833" : "#e0e5ec";
-    return h("div", { key: m.l, style: { background: "#ffffff", border: "1px solid " + tileBorder, borderRadius: 8, padding: "6px 12px", minWidth: 88, textAlign: "center" } },
-      h("div", { style: { display: "flex", justifyContent: "center", alignItems: "center", gap: 4, fontSize: 9, color: hasLive ? "#16a34a" : "#a0aec0", textTransform: "uppercase", fontFamily: mono, marginBottom: 2 } },
-        m.l,
-        hasLive ? h("span", { style: { width: 5, height: 5, borderRadius: "50%", background: "#16a34a", display: "inline-block", marginLeft: 3 } }) : null
+  var macroTiles = tileData.map(function(t) {
+    var hasData = t.v !== "--";
+    var fromIntel = hasData && liveIntel && liveIntel.timestamp;
+    return h("div", { key: t.l, style: { background: "#ffffff", border: "1px solid " + (fromIntel ? "#9333ea30" : "#e0e5ec"), borderRadius: 10, padding: "8px 12px", minWidth: 95, textAlign: "center", boxShadow: fromIntel ? "0 2px 8px rgba(147,51,234,0.08)" : "0 1px 3px rgba(0,0,0,0.04)" } },
+      h("div", { style: { fontSize: 9, color: fromIntel ? "#9333ea" : "#a0aec0", textTransform: "uppercase", fontFamily: mono, marginBottom: 3, fontWeight: 600 } }, t.l,
+        fromIntel ? h("span", { style: { width: 4, height: 4, borderRadius: "50%", background: "#9333ea", display: "inline-block", marginLeft: 4 } }) : null
       ),
-      h("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 5 } },
-        h("span", { style: { fontSize: 16, fontWeight: 700, color: hasLive ? (liveQ.change >= 0 ? "#16a34a" : "#dc2626") : m.c, fontFamily: mono } }, displayVal),
-        h("span", { style: arrow })
-      ),
-      h("div", { style: { fontSize: 9, color: ac, fontFamily: mono, marginTop: 1 } }, displayDelta),
-      h("div", { style: { fontSize: 8, color: hasLive ? "#00ff8888" : "#a0aec0", marginTop: 1 } }, displayCtx)
+      h("div", { style: { fontSize: 16, fontWeight: 700, color: hasData ? "#1a1a2e" : "#a0aec0", fontFamily: mono } }, t.v),
+      t.sub ? h("div", { style: { fontSize: 9, color: "#718096", fontFamily: mono, marginTop: 2 } }, t.sub) : null,
+      !hasData ? h("div", { style: { fontSize: 8, color: "#a0aec0", marginTop: 2 } }, "Click Refresh Intel") : null
     );
   });
 
@@ -1031,7 +1018,8 @@ function GalaxyView(props) {
     var avg = s.stocks.reduce(function(a, b) { return a + lc(b.ticker, b.change); }, 0) / s.stocks.length;
     var tickers = s.stocks.map(function(st) {
       var ch = lc(st.ticker, st.change);
-      return h("span", { key: st.ticker, style: { fontSize: 11, padding: "2px 5px", borderRadius: 3, background: ch >= 0 ? "#00ff8810" : "#ff4d4d10", color: ch >= 0 ? "#16a34a" : "#dc2626", fontFamily: mono, fontWeight: 600 } }, st.ticker + (ch >= 0 ? "+" : "") + ch.toFixed(1) + "%");
+      var hasLiveQ = isLive && liveQuotes[st.ticker] && liveQuotes[st.ticker].price > 0;
+      return h("span", { key: st.ticker, style: { fontSize: 11, padding: "3px 7px", borderRadius: 6, background: hasLiveQ ? (ch >= 0 ? "#dcfce7" : "#fef2f2") : "#f0f3f8", color: hasLiveQ ? (ch >= 0 ? "#16a34a" : "#dc2626") : "#718096", fontFamily: mono, fontWeight: 700, border: hasLiveQ ? "1px solid " + (ch >= 0 ? "#16a34a30" : "#dc262630") : "1px solid #e0e5ec" } }, st.ticker + " " + (ch >= 0 ? "+" : "") + ch.toFixed(1) + "%");
     });
     // Generate live sector summary when connected
     var sectorDesc = s.description;
@@ -1196,15 +1184,19 @@ function GalaxyView(props) {
     var stockRows = items.map(function(item, i) {
       var is7 = Math.min(item.score, 7) === 7;
       var isLiveSignal = item.index === "LIVE" || (item.reasons && item.reasons.some(function(r) { return r.indexOf("(live)") >= 0 || r.indexOf("LIVE") >= 0; }));
-      var cardBorder = is7 ? "2px solid " + color : "1px solid " + (isLiveSignal ? "#e040fb33" : "#e0e5ec");
-      var cardBg = is7 ? "#0c1428" : "#ffffff";
-      var cardShadow = is7 ? "0 0 20px " + color + "30, 0 0 40px " + color + "15" : "none";
+      var isUp = item.change > 0;
+      var isDown = item.change < 0;
+      var hasPrice = item.price > 0;
+      var popColor = isUp ? "#16a34a" : isDown ? "#dc2626" : color;
+      var cardBorder = is7 ? "2px solid " + color : "1px solid " + (hasPrice ? (isUp ? "#16a34a30" : "#dc262630") : (isLiveSignal ? "#e040fb33" : "#e0e5ec"));
+      var cardBg = is7 ? "linear-gradient(135deg, " + color + "08, #ffffff 30%)" : (hasPrice ? (isUp ? "linear-gradient(135deg, #f0fdf4, #ffffff 50%)" : isDown ? "linear-gradient(135deg, #fef2f2, #ffffff 50%)" : "#ffffff") : "#ffffff");
+      var cardShadow = is7 ? "0 4px 20px " + color + "20" : (hasPrice ? (isUp ? "0 2px 10px rgba(22,163,74,0.1)" : isDown ? "0 2px 10px rgba(220,38,38,0.1)" : "none") : "none");
 
-      return h("div", { key: item.ticker + i, className: is7 ? "pulse-card" : "", style: { background: cardBg, border: cardBorder, borderRadius: 10, padding: 12, marginBottom: 8, boxShadow: cardShadow, position: "relative", overflow: "hidden" } },
+      return h("div", { key: item.ticker + i, className: is7 ? "pulse-card" : "", style: { background: cardBg, border: cardBorder, borderLeft: hasPrice ? "4px solid " + popColor : cardBorder, borderRadius: 10, padding: 12, marginBottom: 8, boxShadow: cardShadow, position: "relative", overflow: "hidden" } },
         is7 ? h("div", { style: { position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, " + color + ", transparent)", animation: "shimmer 2s infinite" } }) : null,
         h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
           h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
-            h("span", { style: { fontSize: is7 ? 18 : 16, fontWeight: 800, color: is7 ? "#fff" : item.color, fontFamily: mono, textShadow: is7 ? "0 0 10px " + color : "none" } }, item.ticker),
+            h("span", { style: { fontSize: is7 ? 18 : 16, fontWeight: 800, color: is7 ? color : item.color, fontFamily: mono } }, item.ticker),
             h("span", { style: { fontSize: 12, color: "#606f80" } }, item.name),
             h("span", { style: { fontSize: 10, color: "#a0aec0" } }, item.sector),
             item.index ? h("span", { style: { fontSize: 9, padding: "1px 5px", borderRadius: 4, background: item.index === "LIVE" ? "#e040fb22" : "#d0d8e4", color: item.index === "LIVE" ? "#e040fb" : "#5a8bfa", fontFamily: mono, fontWeight: 700 } }, item.index === "DOW" ? "DJIA" : item.index === "SPX" ? "S&P" : item.index === "LIVE" ? "LIVE" : "NDX") : null,
@@ -1236,7 +1228,7 @@ function GalaxyView(props) {
     ) : null,
     h("div", { style: { fontSize: 11, color: "#e040fb", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 } }, "Automated Strategy Scanner"),
     h("div", { style: { fontSize: 12, color: "#606f80", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " stocks across DJIA, S&P 500, and NASDAQ. Showing scores 5/7 and above only. " + (scanResults.isLiveIntel ? "Live intelligence active." : "Using snapshot data. Click Fetch AI Intel for live signals.")),
-    buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names dragged down by panic. Requires: F&G below 30, composite Sell but above 200-day MA, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current.", "#00d4ff", scanResults.fear.filter(function(x) { return x.score >= 5; })),
+    buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names temporarily dragged down by market panic. The key signal is stocks showing short-term weakness (below 5/10/20-day MAs = 'Sell') but STILL above 200-day MA (long-term uptrend intact). Also requires: F&G below 30, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current.", "#00d4ff", scanResults.fear.filter(function(x) { return x.score >= 5; })),
     buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation signals. Requires: Smart Money accumulation OR green on a red day, volume above average, 3+ MAs bullish, composite Buy signal.", "#00ff88", scanResults.smartFollow.filter(function(x) { return x.score >= 5; })),
     buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. Requires: significant flow into sector, institutional confirmation, RSI below 70. You profit from money movement between sectors.", "#ffd700", scanResults.rotation.filter(function(x) { return x.score >= 5; })),
     h("div", { style: { marginTop: 8, padding: 10, background: "#ffffff", borderRadius: 8, border: "1px solid #e0e5ec", fontSize: 11, color: "#a0aec0", lineHeight: 1.5, textAlign: "center" } }, "Disclaimer: These are educational strategy frameworks, not investment advice. Signals are estimated from available data. Always do your own research and consider consulting a financial advisor before trading.")
@@ -1328,17 +1320,29 @@ function SectorView(props) {
     });
     var maPanel = showMA ? h("div", { onClick: function(e) { e.stopPropagation(); } }, h(MAPanel, { stock: st, color: sector.color })) : null;
 
+    // GREEN/RED visual pop based on live change
+    var isUp = currentChange > 0;
+    var isDown = currentChange < 0;
+    var hasLivePrice = isLive && liveQuotes[st.ticker] && liveQuotes[st.ticker].price > 0;
+    var popColor = isUp ? "#16a34a" : isDown ? "#dc2626" : "#6b7280";
+    var popBg = hasLivePrice ? (isUp ? "linear-gradient(135deg, #f0fdf4 0%, #ffffff 40%)" : isDown ? "linear-gradient(135deg, #fef2f2 0%, #ffffff 40%)" : "#f8f9fc") : "#f8f9fc";
+    var popBorder = hasLivePrice ? (isUp ? "#16a34a40" : isDown ? "#dc262640" : "#e0e5ec") : "#e0e5ec";
+    var popGlow = hov === i ? (hasLivePrice ? (isUp ? "0 4px 24px rgba(22,163,74,0.18), inset 0 0 0 1px #16a34a30" : isDown ? "0 4px 24px rgba(220,38,38,0.18), inset 0 0 0 1px #dc262630" : "0 4px 18px " + sector.glow) : "0 4px 18px " + sector.glow) : (hasLivePrice ? (isUp ? "0 2px 8px rgba(22,163,74,0.08)" : isDown ? "0 2px 8px rgba(220,38,38,0.08)" : "none") : "none");
+
     return h("div", { key: st.ticker, onClick: function() { onStock(st); }, onMouseEnter: function() { setHov(i); }, onMouseLeave: function() { setHov(null); },
-      style: { background: hov === i ? "#f0f3f8" : "#f8f9fc", border: "1px solid " + (hov === i ? sector.color + "40" : "#e0e5ec"), borderRadius: 12, padding: 14, cursor: "pointer", transition: "all .2s", boxShadow: hov === i ? "0 0 18px " + sector.glow : "none" } },
+      style: { background: popBg, border: "1px solid " + popBorder, borderLeft: hasLivePrice ? "4px solid " + popColor : "1px solid " + popBorder, borderRadius: 12, padding: 14, cursor: "pointer", transition: "all .25s ease", boxShadow: popGlow, transform: hov === i ? "translateY(-2px)" : "none" } },
       h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4 } },
         h("div", null,
-          h("span", { style: { fontSize: 18, fontWeight: 800, color: sector.color, fontFamily: mono } }, st.ticker),
+          h("span", { style: { fontSize: 18, fontWeight: 800, color: hasLivePrice ? popColor : sector.color, fontFamily: mono } }, st.ticker),
           h("div", { style: { fontSize: 11, color: "#718096" } }, st.name)
         ),
         h("div", { style: { textAlign: "right" } },
           h("div", { style: { fontSize: 16, fontWeight: 700, color: "#1a1a2e", fontFamily: mono } }, "$" + lp(st.ticker, st.price).toLocaleString()),
-          h(Chg, { v: lc(st.ticker, st.change), sz: 13 }),
-          isLive && liveQuotes[st.ticker] ? h("div", { style: { fontSize: 8, color: "#16a34a", marginTop: 1 } }, "LIVE") : null
+          h("div", { style: { fontSize: 14, fontWeight: 700, color: popColor, fontFamily: mono, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 } },
+            hasLivePrice ? h("span", { style: { display: "inline-block", width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderBottom: isUp ? "6px solid #16a34a" : "none", borderTop: isDown ? "6px solid #dc2626" : "none" } }) : null,
+            (currentChange >= 0 ? "+" : "") + currentChange.toFixed(2) + "%"
+          ),
+          isLive && liveQuotes[st.ticker] ? h("div", { style: { fontSize: 8, color: popColor, marginTop: 1, fontWeight: 700, letterSpacing: 1 } }, "LIVE") : null
         )
       ),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 10px", fontSize: 12, margin: "6px 0" } }, metrics),
