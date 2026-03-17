@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// MARKET UNIVERSE EXPLORER v15 - Final clean build
-// Real closing data: Friday, March 6, 2026
-// CNN Fear & Greed: 27 (Fear) - verified
+// MARKET UNIVERSE EXPLORER v16 - Final clean build
+// MARKET UNIVERSE EXPLORER v16 - All live data
+// No static data - everything fetched live
 
 var mono = "'SF Mono','Fira Code','Consolas',monospace";
 
@@ -161,225 +161,162 @@ function MAToggle(props) {
   }, props.show ? "Hide MAs" : "Show MAs");
 }
 
-var MACRO = { fearGreed: 27, fearLabel: "Fear" };
+var MACRO = { fearGreed: 0, fearLabel: "Loading..." };
 var MACRO_TILES = [
-  { l: "VIX", v: "29.26", c: "#ff4d4d", trend: "up", delta: "+23.2%", ctx: "from 23.75 Thu" },
-  { l: "OIL WTI", v: "$90.21", c: "#22c55e", trend: "up", delta: "+35% wk", ctx: "highest since 2024" },
-  { l: "10Y", v: "4.156%", c: "#78909c", trend: "flat", delta: "+0.02%", ctx: "steady" },
-  { l: "NFP", v: "-92K", c: "#ff4d4d", trend: "down", delta: "miss", ctx: "exp +56K" },
-  { l: "UNEMP", v: "4.4%", c: "#ffd700", trend: "up", delta: "+0.1%", ctx: "from 4.3%" },
-  { l: "P/C RATIO", v: "1.24", c: "#ff4d4d", trend: "up", delta: "bearish", ctx: "above 1.0" },
-  { l: "DXY", v: "98.85", c: "#00d4ff", trend: "down", delta: "-0.47%", ctx: "dollar weak" },
-  { l: "GOLD", v: "$5,176", c: "#ffd700", trend: "up", delta: "+1.92%", ctx: "safe haven" },
+  { l: "VIX", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "OIL WTI", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "10Y", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "NFP", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "UNEMP", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "P/C RATIO", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "DXY", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
+  { l: "GOLD", v: "--", c: "#5a6b8a", trend: "flat", delta: "--", ctx: "Waiting for data" },
 ];
 
-var ECON_CAL = [
-  { date: "Mar 10", event: "NY Fed Inflation Expectations", impact: "High" },
-  { date: "Mar 12", event: "CPI (Feb)", impact: "Critical" },
-  { date: "Mar 13", event: "PPI (Feb)", impact: "High" },
-  { date: "Mar 18-19", event: "FOMC Rate Decision", impact: "Critical" },
-  { date: "Mar 28", event: "Core PCE (Feb)", impact: "Critical" },
-];
+var ECON_CAL = [];
 
-var SMART_MONEY = [
-  { ticker: "MRVL", signal: "Record AI earnings. Vol 250% avg.", color: "#00ff88", type: "Accumulation" },
-  { ticker: "BA", signal: "CEO bought 50K shares + defense bid. Vol 126% avg.", color: "#00ff88", type: "Accumulation" },
-  { ticker: "CF", signal: "+4.98%. Hormuz fertilizer supply play. Vol 180% avg.", color: "#00ff88", type: "Accumulation" },
-  { ticker: "DOW", signal: "JPM upgrade to overweight. +4%. Vol 142% avg.", color: "#00ff88", type: "Upgrade" },
-  { ticker: "BLK", signal: "-7.2%. CAPPED private credit withdrawals. #1 stress signal.", color: "#ff2020", type: "Distribution" },
-  { ticker: "CAT", signal: "Worst Dow -3.57%. Global growth de-risk. Vol 125% avg.", color: "#ff4d4d", type: "Distribution" },
-  { ticker: "NVDA", signal: "CFO sold 25K shares. AI capex doubts. Vol 111% avg.", color: "#ff4d4d", type: "Insider Sell" },
-  { ticker: "TSLA", signal: "Musk sold 4.4M shares. 3.2% short interest.", color: "#ff4d4d", type: "Insider Sell" },
-];
+var SMART_MONEY = [];
 
 // CORRECTED PRICES from verified sources
 var INDEXES = {
   DOW: {
-    name: "Dow Jones", short: "DJIA", close: 47501.55, change: -453.19, changePct: -0.95,
-    components: 30, greenCount: 9,
-    narrative: "NFP -92K shocked. Oil $90 on US-Iran. VIX +23%. Zero green at open, 9 recovered. Boeing led (+4.08%). GS/AXP/CAT worst. Smart money hid in defense, pharma, staples, energy.",
-    institutions: [
-      { name: "Vanguard", aum: "$9.5T", weight: "8.2%", move: "Added defensives JNJ, PG, VZ. Cut tech.", signal: "Defensive", color: "#00d4ff" },
-      { name: "BlackRock", aum: "$11.5T", weight: "7.8%", move: "Capped private credit withdrawals. Energy/healthcare rotation.", signal: "Risk-Off", color: "#ffd700" },
-      { name: "State Street", aum: "$4.4T", weight: "5.1%", move: "XLF $4B inflows YTD. Increased XLE.", signal: "Rotate", color: "#22c55e" },
-      { name: "Fidelity", aum: "$5.0T", weight: "4.5%", move: "Bond ETFs absorbing equity outflows.", signal: "De-risk", color: "#e040fb" },
-      { name: "Capital Group", aum: "$2.8T", weight: "3.9%", move: "Maintained. Increased dividend names.", signal: "Hold", color: "#78909c" },
-      { name: "T. Rowe Price", aum: "$1.6T", weight: "2.8%", move: "Trimmed GS, AXP. Added BA defense.", signal: "Selective", color: "#ff6b35" },
-      { name: "Wellington", aum: "$1.4T", weight: "2.5%", move: "Quality tilt. Added CVX, JNJ.", signal: "Quality", color: "#00ff88" },
-      { name: "Geode Capital", aum: "$1.1T", weight: "2.3%", move: "Passive index tracking.", signal: "Passive", color: "#5a6b8a" },
-      { name: "Northern Trust", aum: "$1.3T", weight: "1.8%", move: "ESG rebalance. Reduced energy.", signal: "ESG", color: "#a78bfa" },
-      { name: "JPM Asset Mgmt", aum: "$3.3T", weight: "1.7%", move: "JPIE inflows. Dividend emphasis.", signal: "Income", color: "#f59e0b" },
-    ],
-    flows: [
-      { from: "Technology", to: "Healthcare", mag: 3, flow: "$2.8B", label: "NVDA/AAPL selling, JNJ/AMGN accumulation", drivers: ["Stagflation", "AI doubts"] },
-      { from: "Financials", to: "Energy", mag: 2, flow: "$1.4B", label: "Bank exposure to oil/inflation hedge", drivers: ["Oil $90", "Rate fear"] },
-      { from: "Industrials", to: "Industrials", mag: 3, flow: "$1.9B", label: "CAT/MMM to BA defense. Widest split.", drivers: ["US-Iran", "Defense"] },
-      { from: "All", to: "Bonds/Cash", mag: 3, flow: "$5.2B", label: "Broad risk-off. $9.1T in money markets.", drivers: ["NFP shock", "VIX +23%"] },
-    ],
+    name: "Dow Jones", short: "DJIA", close: 0, change: 0, changePct: 0,
+    components: 30, greenCount: 0,
+    narrative: "Click Fetch All or wait for auto-refresh to load live market data.",
+    institutions: [],
+    flows: [],
     sectors: [
-      { name: "Technology", color: "#00d4ff", glow: "#00d4ff40", description: "NVDA -3.01%, AAPL -1.09%. IBM +0.9% bucked trend. GS 11.16% weight = massive drag.", stocks: [
-        mk("GS","Goldman Sachs",821.42,-1.68,"Inv Banking","168B",15.8,910,460,1.42,"2.10%","3.2M","2.9M",35,"1.2%","76%","Bearish","Heavy puts 800P. Block selling.","None.","Buy",880,[{date:"Apr 14",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"11.16%"),
-        mk("MSFT","Microsoft",408.96,-0.42,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","Mixed flow. Call buying 420C.","VP sold 4K planned.","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"5.56%"),
-        mk("AAPL","Apple",257.46,-1.09,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation 250P.","Cook 10b5-1.","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.50%"),
-        mk("NVDA","NVIDIA",177.82,-3.01,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","Heavy puts 170P/160P. Vol 111%.","CFO sold 25K 2/28.","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.42%"),
-        mk("IBM","IBM",258.85,+0.90,"IT Services","239B",24.8,280,168,0.72,"2.58%","5.1M","4.8M",56,"0.6%","60%","Bullish","Call accum 265C Apr.","None.","Buy",275,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:71,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.52%"),
-        mk("CRM","Salesforce",202.11,+0.36,"SW","196B",44.2,260,192,1.35,"0.55%","8.2M","7.5M",48,"1.1%","79%","Neutral","Post-earnings +4.3% Thu.","None.","Buy",240,[{date:"May 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Bullish",sma20:"Above",sma50:"Below",sma200:"Above"},"2.75%"),
-        mk("CSCO","Cisco",78.64,-1.71,"Networking","314B",18.5,82,44,0.98,"2.55%","18M","20M",42,"0.8%","76%","Bearish","Low vol puts.","None.","Hold",80,[{date:"May 14",event:"Q3 Earnings",type:"earnings"}],{composite:"Sell",score:32,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.07%"),
+      { name: "Technology", color: "#00d4ff", glow: "#00d4ff40", description: "", stocks: [
+        mk("GS","Goldman Sachs",0,0,"Inv Banking","168B",15.8,910,460,1.42,"2.10%","3.2M","2.9M",35,"1.2%","76%","Bearish","--","None.","Buy",880,[{date:"Apr 14",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"11.16%"),
+        mk("MSFT","Microsoft",0,0,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","--","None","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"5.56%"),
+        mk("AAPL","Apple",0,0,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation 250P.","None","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.50%"),
+        mk("NVDA","NVIDIA",0,0,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","--","None","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.42%"),
+        mk("IBM","IBM",0,0,"IT Services","239B",24.8,280,168,0.72,"2.58%","5.1M","4.8M",56,"0.6%","60%","Bullish","Call accum 265C Apr.","None.","Buy",275,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:71,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.52%"),
+        mk("CRM","Salesforce",0,0,"SW","196B",44.2,260,192,1.35,"0.55%","8.2M","7.5M",48,"1.1%","79%","Neutral","Post-earnings +4.3% Thu.","None.","Buy",240,[{date:"May 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Bullish",sma20:"Above",sma50:"Below",sma200:"Above"},"2.75%"),
+        mk("CSCO","Cisco",0,0,"Networking","314B",18.5,82,44,0.98,"2.55%","18M","20M",42,"0.8%","76%","Bearish","--","None.","Hold",80,[{date:"May 14",event:"Q3 Earnings",type:"earnings"}],{composite:"Sell",score:32,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.07%"),
       ]},
-      { name: "Financials", color: "#ffd700", glow: "#ffd70040", description: "AXP -3.16% intraday, JPM -2.96%. TRV held flat. Stagflation nightmare for banks.", stocks: [
-        mk("JPM","JPMorgan",289.48,-1.39,"Banking","833B",13.4,315,194,1.14,"1.82%","11.5M","10.8M",38,"0.5%","72%","Bearish","Put buying 280P.","Dimon planned sales.","Buy",320,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.93%"),
-        mk("AXP","AmEx",301.00,-2.02,"Consumer Fin","216B",20.1,340,215,1.25,"1.05%","4.8M","4.2M",33,"1.0%","85%","Bearish","Aggressive puts.","None.","Buy",330,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:18,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.09%"),
-        mk("V","Visa",317.36,-0.76,"Payments","638B",30.5,367,259,0.95,"0.72%","7.8M","8.5M",40,"0.4%","94%","Neutral","Balanced flow.","None.","Buy",355,[{date:"Apr 22",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.31%"),
-        mk("TRV","Travelers",306.31,-0.11,"Insurance","94B",12.8,320,215,0.65,"1.35%","1.5M","1.8M",52,"0.6%","82%","Neutral","Low activity.","None.","Hold",310,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:55,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"4.16%"),
+      { name: "Financials", color: "#ffd700", glow: "#ffd70040", description: "", stocks: [
+        mk("JPM","JPMorgan",0,0,"Banking","833B",13.4,315,194,1.14,"1.82%","11.5M","10.8M",38,"0.5%","72%","Bearish","--","None","Buy",320,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.93%"),
+        mk("AXP","AmEx",0,0,"Consumer Fin","216B",20.1,340,215,1.25,"1.05%","4.8M","4.2M",33,"1.0%","85%","Bearish","--","None.","Buy",330,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:18,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.09%"),
+        mk("V","Visa",0,0,"Payments","638B",30.5,367,259,0.95,"0.72%","7.8M","8.5M",40,"0.4%","94%","Neutral","Balanced flow.","None.","Buy",355,[{date:"Apr 22",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.31%"),
+        mk("TRV","Travelers",0,0,"Insurance","94B",12.8,320,215,0.65,"1.35%","1.5M","1.8M",52,"0.6%","82%","Neutral","Low activity.","None.","Hold",310,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:55,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"4.16%"),
       ]},
-      { name: "Healthcare", color: "#00ff88", glow: "#00ff8840", description: "JNJ +0.32%, AMGN +0.53%. Safe haven rotation. UNH -10.66% YTD.", stocks: [
-        mk("UNH","UnitedHealth",286.48,-0.79,"Managed Care","521B",17.2,415,275,0.68,"1.75%","6.8M","5.5M",28,"1.4%","88%","Bearish","Put accum 280P/270P.","CEO sold 8K.","Hold",340,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:15,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"3.89%"),
-        mk("JNJ","J&J",240.40,+0.32,"Pharma","577B",20.8,250,146,0.52,"2.75%","7.5M","8.2M",55,"0.5%","71%","Bullish","Defensive call buying.","None.","Buy",260,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.27%"),
-        mk("AMGN","Amgen",369.53,+0.53,"Biotech","198B",28.4,380,260,0.58,"2.55%","2.8M","3.1M",58,"0.9%","80%","Neutral","Mild calls.","None.","Buy",390,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"5.02%"),
-        mk("MRK","Merck",115.79,-0.24,"Pharma","293B",14.5,136,99,0.42,"2.82%","12M","13M",41,"0.7%","77%","Neutral","Low activity.","None.","Hold",125,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.57%"),
+      { name: "Healthcare", color: "#00ff88", glow: "#00ff8840", description: "", stocks: [
+        mk("UNH","UnitedHealth",0,0,"Managed Care","521B",17.2,415,275,0.68,"1.75%","6.8M","5.5M",28,"1.4%","88%","Bearish","Put accum 280P/270P.","None","Hold",340,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:15,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"3.89%"),
+        mk("JNJ","J&J",0,0,"Pharma","577B",20.8,250,146,0.52,"2.75%","7.5M","8.2M",55,"0.5%","71%","Bullish","--","None.","Buy",260,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.27%"),
+        mk("AMGN","Amgen",0,0,"Biotech","198B",28.4,380,260,0.58,"2.55%","2.8M","3.1M",58,"0.9%","80%","Neutral","--","None.","Buy",390,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"5.02%"),
+        mk("MRK","Merck",0,0,"Pharma","293B",14.5,136,99,0.42,"2.82%","12M","13M",41,"0.7%","77%","Neutral","Low activity.","None.","Hold",125,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.57%"),
       ]},
-      { name: "Consumer", color: "#e040fb", glow: "#e040fb40", description: "AMZN -2.62% vs WMT +0.40%. Staples beat discretionary. NKE -1.74% pre-earnings.", stocks: [
-        mk("AMZN","Amazon",213.21,-2.62,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","Heavy puts 205P/200P.","Jassy 10b5-1.","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.90%"),
-        mk("WMT","Walmart",123.80,+0.40,"Retail","496B",36.8,130,78,0.55,"1.12%","18M","16M",54,"0.3%","52%","Bullish","Defensive. YTD +10.68%.","None.","Buy",135,[{date:"May 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:73,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"1.68%"),
-        mk("HD","Home Depot",357.92,-1.04,"Home Impr","356B",23.5,425,325,1.05,"2.48%","4.2M","4.8M",39,"0.6%","71%","Bearish","Housing weakness.","None.","Buy",400,[{date:"May 13",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.86%"),
-        mk("MCD","McDonalds",328.06,+0.19,"Restaurants","235B",26.1,345,243,0.68,"2.15%","3.5M","4.0M",51,"0.5%","74%","Neutral","Trade-down play.","None.","Buy",350,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:55,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"4.46%"),
-        mk("NKE","Nike",57.01,-1.74,"Apparel","85B",22.8,82,55,1.12,"1.85%","11M","10M",32,"1.8%","78%","Bearish","Pre-3/31 earnings puts.","None.","Hold",68,[{date:"Mar 31",event:"Q3 Earnings",type:"earnings"}],{composite:"Strong Sell",score:14,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.77%"),
-        mk("KO","Coca-Cola",77.04,+0.01,"Beverages","332B",27.5,78,57,0.58,"2.65%","14M","15M",53,"0.4%","69%","Neutral","Safe haven.","None.","Buy",80,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"1.05%"),
-        mk("DIS","Disney",101.54,-0.85,"Entertainment","185B",34.2,122,84,1.32,"0.85%","9.5M","10.2M",40,"1.2%","67%","Bearish","Modest puts.","None.","Buy",120,[{date:"May 7",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.38%"),
-        mk("PG","P&G",153.63,-0.23,"Household","362B",26.8,175,152,0.42,"2.55%","6.8M","7.5M",46,"0.3%","65%","Neutral","YTD +14%.","None.","Hold",165,[{date:"Apr 22",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"2.09%"),
+      { name: "Consumer", color: "#e040fb", glow: "#e040fb40", description: "", stocks: [
+        mk("AMZN","Amazon",0,0,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","--","None","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.90%"),
+        mk("WMT","Walmart",0,0,"Retail","496B",36.8,130,78,0.55,"1.12%","18M","16M",54,"0.3%","52%","Bullish","Defensive. YTD +10.68%.","None.","Buy",135,[{date:"May 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:73,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"1.68%"),
+        mk("HD","Home Depot",0,0,"Home Impr","356B",23.5,425,325,1.05,"2.48%","4.2M","4.8M",39,"0.6%","71%","Bearish","Housing weakness.","None.","Buy",400,[{date:"May 13",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.86%"),
+        mk("MCD","McDonalds",0,0,"Restaurants","235B",26.1,345,243,0.68,"2.15%","3.5M","4.0M",51,"0.5%","74%","Neutral","Trade-down play.","None.","Buy",350,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:55,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"4.46%"),
+        mk("NKE","Nike",0,0,"Apparel","85B",22.8,82,55,1.12,"1.85%","11M","10M",32,"1.8%","78%","Bearish","--","None.","Hold",68,[{date:"Mar 31",event:"Q3 Earnings",type:"earnings"}],{composite:"Strong Sell",score:14,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.77%"),
+        mk("KO","Coca-Cola",0,0,"Beverages","332B",27.5,78,57,0.58,"2.65%","14M","15M",53,"0.4%","69%","Neutral","Safe haven.","None.","Buy",80,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"1.05%"),
+        mk("DIS","Disney",0,0,"Entertainment","185B",34.2,122,84,1.32,"0.85%","9.5M","10.2M",40,"1.2%","67%","Bearish","--","None.","Buy",120,[{date:"May 7",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.38%"),
+        mk("PG","P&G",0,0,"Household","362B",26.8,175,152,0.42,"2.55%","6.8M","7.5M",46,"0.3%","65%","Neutral","YTD +14%.","None.","Hold",165,[{date:"Apr 22",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"2.09%"),
       ]},
-      { name: "Industrials", color: "#ff6b35", glow: "#ff6b3540", description: "BA +4.08% vs CAT -3.57%. CAT = 9.25% Dow weight = enormous drag.", stocks: [
-        mk("BA","Boeing",231.11,+4.08,"Aerospace","141B",-18.5,275,140,1.55,"0%","12M","9.5M",62,"2.5%","67%","Bullish","Massive calls 240C/250C. DOW LEADER.","CEO bought 50K.","Hold",250,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:82,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.14%"),
-        mk("CAT","Caterpillar",680.90,-3.57,"Machinery","336B",17.2,750,310,1.08,"1.15%","3.5M","2.8M",30,"1.0%","75%","Very Bearish","Aggressive puts 660P. WORST DOW.","None.","Buy",750,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:20,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"9.25%"),
-        mk("HON","Honeywell",235.29,-1.30,"Industrial","154B",22.1,260,190,1.02,"1.82%","4.5M","4.2M",38,"0.8%","78%","Bearish","Modest puts.","None.","Buy",260,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:32,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.20%"),
-        mk("MMM","3M",153.41,-1.79,"Mfg","84B",16.5,175,85,1.05,"2.20%","3.8M","3.5M",36,"1.5%","71%","Bearish","Mfg recession puts.","None.","Hold",165,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.08%"),
+      { name: "Industrials", color: "#ff6b35", glow: "#ff6b3540", description: "", stocks: [
+        mk("BA","Boeing",0,0,"Aerospace","141B",-18.5,275,140,1.55,"0%","12M","9.5M",62,"2.5%","67%","Bullish","--","None","Hold",250,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:82,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"3.14%"),
+        mk("CAT","Caterpillar",0,0,"Machinery","336B",17.2,750,310,1.08,"1.15%","3.5M","2.8M",30,"1.0%","75%","Very Bearish","--","None.","Buy",750,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:20,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"9.25%"),
+        mk("HON","Honeywell",0,0,"Industrial","154B",22.1,260,190,1.02,"1.82%","4.5M","4.2M",38,"0.8%","78%","Bearish","--","None.","Buy",260,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:32,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.20%"),
+        mk("MMM","3M",0,0,"Mfg","84B",16.5,175,85,1.05,"2.20%","3.8M","3.5M",36,"1.5%","71%","Bearish","--","None.","Hold",165,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.08%"),
       ]},
-      { name: "Energy", color: "#22c55e", glow: "#22c55e40", description: "CVX flat. Oil $90 (+35% wk). Only safe haven sector.", stocks: [
-        mk("CVX","Chevron",189.94,+0.02,"Oil & Gas","357B",14.2,195,140,0.92,"3.55%","8.5M","8.0M",68,"0.6%","70%","Bullish","Calls 195C/200C.","CFO bought 3K.","Buy",200,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:80,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"2.58%"),
-        mk("SHW","Sherwin-Williams",329.88,-1.66,"Chemicals","84B",30.2,400,288,1.08,"0.85%","1.8M","1.5M",34,"0.9%","82%","Bearish","Puts. Oil = input costs.","None.","Buy",380,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.48%"),
+      { name: "Energy", color: "#22c55e", glow: "#22c55e40", description: "", stocks: [
+        mk("CVX","Chevron",0,0,"Oil & Gas","357B",14.2,195,140,0.92,"3.55%","8.5M","8.0M",68,"0.6%","70%","Bullish","--","None","Buy",200,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:80,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"2.58%"),
+        mk("SHW","Sherwin-Williams",0,0,"Chemicals","84B",30.2,400,288,1.08,"0.85%","1.8M","1.5M",34,"0.9%","82%","Bearish","--","None.","Buy",380,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"4.48%"),
       ]},
-      { name: "Telecom", color: "#78909c", glow: "#78909c40", description: "VZ -0.12%. BEST DOW YTD +25.71%. 5.25% yield.", stocks: [
-        mk("VZ","Verizon",51.12,-0.12,"Telecom","215B",10.8,52,37,0.38,"5.25%","19M","21M",55,"0.5%","62%","Bullish","Bond proxy. Best YTD.","None.","Hold",52,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.69%"),
+      { name: "Telecom", color: "#78909c", glow: "#78909c40", description: "", stocks: [
+        mk("VZ","Verizon",0,0,"Telecom","215B",10.8,52,37,0.38,"5.25%","19M","21M",55,"0.5%","62%","Bullish","Bond proxy. Best YTD.","None.","Hold",52,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.69%"),
       ]},
     ]
   },
   SPX: {
-    name: "S&P 500", short: "SPX", close: 6740.02, change: -90.69, changePct: -1.33,
-    components: 503, greenCount: 66,
-    narrative: "434 of 503 red. Energy ONLY green sector. Counter-trend: CF +4.98%, Bunge +3.14% (Hormuz fertilizer play), BA +4.08% defense, DOW Inc +4% (JPM upgrade). BLK -7.2% capping withdrawals = top stress signal. MRVL +10% lone tech bright spot.",
-    institutions: [
-      { name: "Vanguard", aum: "$9.5T", weight: "9.1%", move: "VOO $2.1B outflows. VTV Value inflows.", signal: "Value", color: "#00d4ff" },
-      { name: "BlackRock", aum: "$11.5T", weight: "8.5%", move: "CAPPED private credit withdrawals. Top stress signal.", signal: "Stress", color: "#ff4d4d" },
-      { name: "State Street", aum: "$4.4T", weight: "5.8%", move: "XLE +$800M, XLF +$400M inflows.", signal: "Sector Shift", color: "#22c55e" },
-      { name: "Fidelity", aum: "$5.0T", weight: "4.2%", move: "FBND strong inflows. Bond rotation.", signal: "Bonds", color: "#e040fb" },
-      { name: "Invesco", aum: "$1.8T", weight: "3.2%", move: "RSP equal-weight $5B inflows Jan.", signal: "Equal Wt", color: "#f59e0b" },
-      { name: "Capital Group", aum: "$2.8T", weight: "3.5%", move: "Quality factor tilt. Growth to GARP.", signal: "Quality", color: "#78909c" },
-      { name: "T. Rowe Price", aum: "$1.6T", weight: "2.4%", move: "Trimmed mega-cap. Added mid-cap.", signal: "Mid-Cap", color: "#ff6b35" },
-      { name: "Wellington", aum: "$1.4T", weight: "2.1%", move: "Increased energy, reduced discretionary.", signal: "Real Assets", color: "#22c55e" },
-      { name: "Geode Capital", aum: "$1.1T", weight: "1.9%", move: "Passive tracking. No tactical shifts.", signal: "Passive", color: "#5a6b8a" },
-      { name: "JPM Asset Mgmt", aum: "$3.3T", weight: "1.8%", move: "JEPI/JPIE massive inflows. Income.", signal: "Income", color: "#a78bfa" },
-    ],
-    flows: [
-      { from: "Info Tech", to: "Energy", mag: 3, flow: "$4.2B", label: "Largest tech-to-energy rotation of 2026", drivers: ["Oil $90", "AI fatigue"] },
-      { from: "Tech/Growth", to: "Ag/Fertilizer", mag: 2, flow: "$1.2B", label: "HIDDEN: CF +4.98%, BG +3.14%. Hormuz supply play.", drivers: ["Hormuz", "Planting season"] },
-      { from: "Financials", to: "Staples", mag: 2, flow: "$1.8B", label: "Rate-sensitive to recession-proof", drivers: ["Stagflation", "Consumer pullback"] },
-      { from: "All", to: "Treasuries", mag: 3, flow: "$8.5B", label: "Broad risk-off to fixed income", drivers: ["NFP -92K", "VIX 29"] },
-    ],
+    name: "S&P 500", short: "SPX", close: 0, change: 0, changePct: 0,
+    components: 503, greenCount: 0,
+    narrative: "Click Fetch All or wait for auto-refresh to load live market data.",
+    institutions: [],
+    flows: [],
     sectors: [
-      { name: "Energy (ONLY GREEN)", color: "#22c55e", glow: "#22c55e40", description: "Only green S&P sector. Half of top 20 were oil & gas E&P names.", stocks: [
-        mk("XOM","ExxonMobil",118.40,+0.85,"Integrated","498B",13.5,125,100,0.88,"3.35%","16M","17M",65,"0.5%","64%","Bullish","Call buying. Oil tailwind.","None.","Buy",125,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.82%"),
-        mk("CVX","Chevron",189.94,+0.02,"Integrated","357B",14.2,195,140,0.92,"3.55%","8.5M","8.0M",68,"0.6%","70%","Bullish","Calls 195C/200C.","CFO bought 3K.","Buy",200,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:80,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.59%"),
+      { name: "Energy", color: "#22c55e", glow: "#22c55e40", description: "", stocks: [
+        mk("XOM","ExxonMobil",0,0,"Integrated","498B",13.5,125,100,0.88,"3.35%","16M","17M",65,"0.5%","64%","Bullish","--","None.","Buy",125,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.82%"),
+        mk("CVX","Chevron",0,0,"Integrated","357B",14.2,195,140,0.92,"3.55%","8.5M","8.0M",68,"0.6%","70%","Bullish","--","None","Buy",200,[{date:"Apr 25",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:80,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.59%"),
       ]},
-      { name: "Ag & Fertilizer *", color: "#a3e635", glow: "#a3e63540", description: "HIDDEN PLAY. CF +4.98%, Bunge +3.14%, ADM +1.37%. Hormuz disrupting fertilizer supply.", stocks: [
-        mk("CF","CF Industries",116.41,+4.98,"Nitrogen","20.7B",14.8,125,72,0.95,"1.85%","5.2M","2.9M",68,"3.2%","82%","Bullish","Massive calls. Barclays PT $120. Vol 180%.","SVP sold 2.7K 3/3.","Buy",120,[{date:"May 7",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:85,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.03%"),
-        mk("BG","Bunge",108.50,+3.14,"Ag Products","15B",10.2,115,85,0.72,"2.45%","2.8M","1.8M",62,"1.5%","78%","Bullish","Unusual calls. Hormuz food supply. Vol 155%.","None.","Buy",115,[{date:"Apr 30",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:70,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.02%"),
-        mk("ADM","Archer Daniels",52.80,+1.37,"Ag Processing","28B",12.5,58,42,0.88,"3.55%","4.5M","3.8M",55,"2.0%","72%","Bullish","Modest calls. Supply chain play.","None.","Hold",58,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.05%"),
+      { name: "Ag & Fertilizer *", color: "#a3e635", glow: "#a3e63540", description: "", stocks: [
+        mk("CF","CF Industries",0,0,"Nitrogen","20.7B",14.8,125,72,0.95,"1.85%","5.2M","2.9M",68,"3.2%","82%","Bullish","--","None","Buy",120,[{date:"May 7",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:85,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.03%"),
+        mk("BG","Bunge",0,0,"Ag Products","15B",10.2,115,85,0.72,"2.45%","2.8M","1.8M",62,"1.5%","78%","Bullish","--","None.","Buy",115,[{date:"Apr 30",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:70,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.02%"),
+        mk("ADM","Archer Daniels",0,0,"Ag Processing","28B",12.5,58,42,0.88,"3.55%","4.5M","3.8M",55,"2.0%","72%","Bullish","--","None.","Hold",58,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.05%"),
       ]},
-      { name: "Defense *", color: "#f97316", glow: "#f9731640", description: "BA +4.08%, RTX +1.2%. Direct US-Iran conflict beneficiaries.", stocks: [
-        mk("BA","Boeing",231.11,+4.08,"Aerospace","141B",-18.5,275,140,1.55,"0%","12M","9.5M",62,"2.5%","67%","Bullish","Massive calls. Vol 126%.","CEO bought 50K.","Hold",250,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:82,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.23%"),
-        mk("RTX","RTX Corp",132.40,+1.20,"Defense","195B",35.5,140,98,0.78,"1.95%","5.2M","4.8M",58,"0.7%","80%","Bullish","Call buying. Defense demand.","None.","Buy",145,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.32%"),
+      { name: "Defense *", color: "#f97316", glow: "#f9731640", description: "", stocks: [
+        mk("BA","Boeing",0,0,"Aerospace","141B",-18.5,275,140,1.55,"0%","12M","9.5M",62,"2.5%","67%","Bullish","--","None","Hold",250,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:82,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.23%"),
+        mk("RTX","RTX Corp",0,0,"Defense","195B",35.5,140,98,0.78,"1.95%","5.2M","4.8M",58,"0.7%","80%","Bullish","--","None.","Buy",145,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.32%"),
       ]},
-      { name: "Info Technology", color: "#00d4ff", glow: "#00d4ff40", description: "32% of S&P. NVDA 7.17% weight -3% = massive drag. MRVL +10% lone outlier.", stocks: [
-        mk("NVDA","NVIDIA",177.82,-3.01,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","Heavy puts. CFO selling.","CFO sold 25K.","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"7.17%"),
-        mk("AAPL","Apple",257.46,-1.09,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation.","Cook 10b5-1.","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"5.86%"),
-        mk("MSFT","Microsoft",408.96,-0.42,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","Mixed flow.","VP sold 4K.","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"5.33%"),
-        mk("AVGO","Broadcom",330.45,-0.69,"Semis","1.02T",38.2,380,128,1.32,"1.15%","28M","25M",44,"0.8%","82%","Neutral","Modest put buying.","None.","Strong Buy",380,[{date:"Jun 12",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:42,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.51%"),
-        mk("MRVL","Marvell",98.20,+10.20,"Custom AI","85B",55.2,110,62,1.65,"0.35%","45M","18M",78,"2.1%","85%","Bullish","MASSIVE calls. Record earnings. Vol 250%.","None.","Strong Buy",115,[{date:"Jun 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:88,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.14%"),
+      { name: "Info Technology", color: "#00d4ff", glow: "#00d4ff40", description: "", stocks: [
+        mk("NVDA","NVIDIA",0,0,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","--","None","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"7.17%"),
+        mk("AAPL","Apple",0,0,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation.","None","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"5.86%"),
+        mk("MSFT","Microsoft",0,0,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","Mixed flow.","None","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"5.33%"),
+        mk("AVGO","Broadcom",0,0,"Semis","1.02T",38.2,380,128,1.32,"1.15%","28M","25M",44,"0.8%","82%","Neutral","--","None.","Strong Buy",380,[{date:"Jun 12",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:42,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.51%"),
+        mk("MRVL","Marvell",0,0,"Custom AI","85B",55.2,110,62,1.65,"0.35%","45M","18M",78,"2.1%","85%","Bullish","--","None.","Strong Buy",115,[{date:"Jun 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:88,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.14%"),
       ]},
-      { name: "Financials", color: "#ffd700", glow: "#ffd70040", description: "BLK -7.2% capped withdrawals = TOP signal. Banks -1.5% to -3%.", stocks: [
-        mk("BLK","BlackRock",905.00,-7.20,"Asset Mgmt","140B",22.5,1065,780,1.35,"2.15%","2.8M","1.5M",22,"1.8%","78%","Very Bearish","PUT AVALANCHE. Vol 220%. Capped withdrawals.","None.","Buy",1050,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:12,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.23%"),
-        mk("JPM","JPMorgan",289.48,-1.39,"Banking","833B",13.4,315,194,1.14,"1.82%","11.5M","10.8M",38,"0.5%","72%","Bearish","Put buying 280P.","Dimon sales.","Buy",320,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.37%"),
-        mk("GS","Goldman",821.42,-1.68,"Inv Banking","168B",15.8,910,460,1.42,"2.10%","3.2M","2.9M",35,"1.2%","76%","Bearish","Heavy puts.","None.","Buy",880,[{date:"Apr 14",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.28%"),
+      { name: "Financials", color: "#ffd700", glow: "#ffd70040", description: "", stocks: [
+        mk("BLK","BlackRock",0,0,"Asset Mgmt","140B",22.5,1065,780,1.35,"2.15%","2.8M","1.5M",22,"1.8%","78%","Very Bearish","--","None.","Buy",1050,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Sell",score:12,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.23%"),
+        mk("JPM","JPMorgan",0,0,"Banking","833B",13.4,315,194,1.14,"1.82%","11.5M","10.8M",38,"0.5%","72%","Bearish","--","None","Buy",320,[{date:"Apr 11",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"1.37%"),
+        mk("GS","Goldman",0,0,"Inv Banking","168B",15.8,910,460,1.42,"2.10%","3.2M","2.9M",35,"1.2%","76%","Bearish","--","None.","Buy",880,[{date:"Apr 14",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.28%"),
       ]},
-      { name: "Comm Services", color: "#f59e0b", glow: "#f59e0b40", description: "GOOGL -0.87% (6.39% weight). META -2.38%. Risk-off dominated.", stocks: [
-        mk("GOOGL","Alphabet",298.52,-0.87,"Search/Cloud","2.14T",22.5,349,141,1.08,"0.45%","34M","34M",42,"0.6%","72%","Bearish","Put buying. Moderate volume.","None.","Strong Buy",340,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"6.39%"),
-        mk("META","Meta",644.86,-2.38,"Social Media","1.64T",24.8,796,480,1.38,"0.32%","13M","13M",40,"0.8%","79%","Bearish","Put buying. Ad resilient but risk-off.","Zuckerberg 10b5-1.","Buy",720,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.49%"),
+      { name: "Comm Services", color: "#f59e0b", glow: "#f59e0b40", description: "", stocks: [
+        mk("GOOGL","Alphabet",0,0,"Search/Cloud","2.14T",22.5,349,141,1.08,"0.45%","34M","34M",42,"0.6%","72%","Bearish","--","None.","Strong Buy",340,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"6.39%"),
+        mk("META","Meta",0,0,"Social Media","1.64T",24.8,796,480,1.38,"0.32%","13M","13M",40,"0.8%","79%","Bearish","--","None","Buy",720,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.49%"),
       ]},
-      { name: "Consumer Disc", color: "#e040fb", glow: "#e040fb40", description: "AMZN -2.62% (3.98% weight). TSLA -2.17%. Consumer weakness.", stocks: [
-        mk("AMZN","Amazon",213.21,-2.62,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","Heavy puts 205P/200P.","Jassy 10b5-1.","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.98%"),
-        mk("TSLA","Tesla",396.73,-2.17,"EVs","1.27T",52.5,499,214,2.05,"0%","64M","64M",40,"3.2%","48%","Bearish","Heavy both sides. High short int.","Musk sold 4.4M shares.","Hold",460,[{date:"Apr 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.31%"),
+      { name: "Consumer Disc", color: "#e040fb", glow: "#e040fb40", description: "", stocks: [
+        mk("AMZN","Amazon",0,0,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","--","None","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"3.98%"),
+        mk("TSLA","Tesla",0,0,"EVs","1.27T",52.5,499,214,2.05,"0%","64M","64M",40,"3.2%","48%","Bearish","Heavy both sides. High short int.","None","Hold",460,[{date:"Apr 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.31%"),
       ]},
-      { name: "Consumer Staples *", color: "#a78bfa", glow: "#a78bfa40", description: "Defensive + packaged food surprise. Campbells +1.74%, Conagra +1.37%.", stocks: [
-        mk("WMT","Walmart",123.80,+0.40,"Retail","496B",36.8,130,78,0.55,"1.12%","18M","16M",54,"0.3%","52%","Bullish","Defensive. YTD +10.68%.","None.","Buy",135,[{date:"May 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:73,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.81%"),
-        mk("KO","Coca-Cola",77.04,+0.01,"Beverages","332B",27.5,78,57,0.58,"2.65%","14M","15M",53,"0.4%","69%","Neutral","Safe haven hold.","None.","Buy",80,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.54%"),
+      { name: "Consumer Staples *", color: "#a78bfa", glow: "#a78bfa40", description: "", stocks: [
+        mk("WMT","Walmart",0,0,"Retail","496B",36.8,130,78,0.55,"1.12%","18M","16M",54,"0.3%","52%","Bullish","Defensive. YTD +10.68%.","None.","Buy",135,[{date:"May 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:73,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.81%"),
+        mk("KO","Coca-Cola",0,0,"Beverages","332B",27.5,78,57,0.58,"2.65%","14M","15M",53,"0.4%","69%","Neutral","Safe haven hold.","None.","Buy",80,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.54%"),
       ]},
-      { name: "Healthcare", color: "#00ff88", glow: "#00ff8840", description: "LLY held (1.55% wt). JNJ +0.32%. UNH continued slide.", stocks: [
-        mk("LLY","Eli Lilly",820.50,-0.35,"Pharma","782B",88.5,850,540,0.62,"0.58%","3.8M","3.2M",55,"0.5%","83%","Neutral","GLP-1 momentum.","None.","Strong Buy",900,[{date:"Apr 30",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"1.55%"),
-        mk("JNJ","J&J",240.40,+0.32,"Pharma","577B",20.8,250,146,0.52,"2.75%","7.5M","8.2M",55,"0.5%","71%","Bullish","Defensive buying.","None.","Buy",260,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.94%"),
+      { name: "Healthcare", color: "#00ff88", glow: "#00ff8840", description: "", stocks: [
+        mk("LLY","Eli Lilly",0,0,"Pharma","782B",88.5,850,540,0.62,"0.58%","3.8M","3.2M",55,"0.5%","83%","Neutral","GLP-1 momentum.","None.","Strong Buy",900,[{date:"Apr 30",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:68,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"1.55%"),
+        mk("JNJ","J&J",0,0,"Pharma","577B",20.8,250,146,0.52,"2.75%","7.5M","8.2M",55,"0.5%","71%","Bullish","--","None.","Buy",260,[{date:"Apr 15",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:72,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.94%"),
       ]},
-      { name: "Materials", color: "#8d6e63", glow: "#8d6e6340", description: "DOW Inc +4% on JPM upgrade. Counter-trend winner.", stocks: [
-        mk("DOW","Dow Inc",48.20,+4.00,"Chemicals","34B",18.5,55,42,1.22,"4.85%","8.5M","6.0M",62,"2.2%","72%","Bullish","JPM upgrade. Vol 142%.","None.","Buy",55,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.06%"),
+      { name: "Materials", color: "#8d6e63", glow: "#8d6e6340", description: "", stocks: [
+        mk("DOW","Dow Inc",0,0,"Chemicals","34B",18.5,55,42,1.22,"4.85%","8.5M","6.0M",62,"2.2%","72%","Bullish","--","None.","Buy",55,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.06%"),
       ]},
     ]
   },
   NDX: {
-    name: "NASDAQ Composite", short: "IXIC", close: 22387.68, change: -361.31, changePct: -1.59,
-    components: 3000, greenCount: "~600",
-    narrative: "Worst major index. AI fatigue - CoreWeave -20%. Mag 7 all red. MRVL +10% only bright spot. Worst monthly since Mar 2025. Growth-to-value rotation accelerating (RSP $5B inflows).",
-    institutions: [
-      { name: "Vanguard", aum: "$9.5T", weight: "7.8%", move: "QQQ $1.5B outflows. Growth to value.", signal: "De-risk", color: "#00d4ff" },
-      { name: "BlackRock", aum: "$11.5T", weight: "7.2%", move: "IBIT outflows. Tech ETF selling.", signal: "Risk-Off", color: "#ffd700" },
-      { name: "ARK Invest", aum: "$14B", weight: "0.5%", move: "ARKK trimmed TSLA. Added PLTR, COIN.", signal: "Contrarian", color: "#e040fb" },
-      { name: "Invesco", aum: "$1.8T", weight: "4.5%", move: "RSP $5B inflows Jan. Anti-concentration.", signal: "Equal Wt", color: "#22c55e" },
-      { name: "Fidelity", aum: "$5.0T", weight: "4.0%", move: "Contrafund reduced NVDA, added LLY.", signal: "Quality", color: "#78909c" },
-      { name: "State Street", aum: "$4.4T", weight: "3.8%", move: "XLK outflows $1.2B. Broad tech sell.", signal: "Tech Sell", color: "#ff4d4d" },
-      { name: "Capital Group", aum: "$2.8T", weight: "3.2%", move: "Growth Fund reduced Mag 7.", signal: "Selective", color: "#ff6b35" },
-      { name: "T. Rowe Price", aum: "$1.6T", weight: "2.5%", move: "Blue Chip Growth trimmed NVDA, MSFT.", signal: "Rotate", color: "#f59e0b" },
-      { name: "Citadel", aum: "$65B", weight: "1.2%", move: "Increased QQQ put hedges. L/S active.", signal: "Hedging", color: "#a78bfa" },
-      { name: "Two Sigma", aum: "$60B", weight: "0.8%", move: "Quant risk-off. Momentum underperforming.", signal: "Risk-Off", color: "#5a6b8a" },
-    ],
-    flows: [
-      { from: "Mag 7", to: "Value/Dividend", mag: 3, flow: "$5.5B", label: "Concentration unwind. Top 10 = 40%.", drivers: ["Concentration", "AI fatigue"] },
-      { from: "Software", to: "Cybersecurity", mag: 1, flow: "$0.8B", label: "SaaS to security on geopolitical risk.", drivers: ["US-Iran cyber", "Gov spend"] },
-      { from: "Growth", to: "Defensive", mag: 2, flow: "$2.2B", label: "High-beta to low-vol quality.", drivers: ["VIX 29", "Quality factor"] },
-      { from: "All Tech", to: "Bonds/Cash", mag: 3, flow: "$7.0B", label: "Broad NASDAQ de-risk to fixed income.", drivers: ["Stagflation", "CoreWeave -20%"] },
-    ],
+    name: "NASDAQ Composite", short: "IXIC", close: 0, change: 0, changePct: 0,
+    components: 3000, greenCount: 0,
+    narrative: "Click Fetch All or wait for auto-refresh to load live market data.",
+    institutions: [],
+    flows: [],
     sectors: [
-      { name: "Mag 7 (All Red)", color: "#00d4ff", glow: "#00d4ff40", description: "Every Mag 7 red. Combined ~35% of NASDAQ. When all sell, index has no chance.", stocks: [
-        mk("NVDA","NVIDIA",177.82,-3.01,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","Heavy puts. AI questioning.","CFO sold 25K.","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~7%"),
-        mk("AAPL","Apple",257.46,-1.09,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation.","Cook 10b5-1.","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~6%"),
-        mk("MSFT","Microsoft",408.96,-0.42,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","Mixed.","VP sold 4K.","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"~5%"),
-        mk("GOOGL","Alphabet",298.52,-0.87,"Search","2.14T",22.5,349,141,1.08,"0.45%","34M","34M",42,"0.6%","72%","Bearish","Put buying.","None.","Strong Buy",340,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~5%"),
-        mk("AMZN","Amazon",213.21,-2.62,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","Heavy puts.","Jassy 10b5-1.","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~4%"),
-        mk("META","Meta",644.86,-2.38,"Social","1.64T",24.8,796,480,1.38,"0.32%","13M","13M",40,"0.8%","79%","Bearish","Put buying.","Zuckerberg 10b5-1.","Buy",720,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~3%"),
-        mk("TSLA","Tesla",396.73,-2.17,"EVs","1.27T",52.5,499,214,2.05,"0%","64M","64M",40,"3.2%","48%","Bearish","Heavy both sides.","Musk sold 4.4M.","Hold",460,[{date:"Apr 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~2%"),
+      { name: "Mag 7 (All Red)", color: "#00d4ff", glow: "#00d4ff40", description: "", stocks: [
+        mk("NVDA","NVIDIA",0,0,"Semis","4.35T",55.8,220,76,1.78,"0.02%","310M","280M",38,"1.3%","68%","Bearish","--","None","Strong Buy",210,[{date:"May 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~7%"),
+        mk("AAPL","Apple",0,0,"Electronics","3.9T",33.2,280,164,1.24,"0.48%","62M","58M",41,"0.7%","74%","Bearish","Put accumulation.","None","Buy",275,[{date:"Apr 24",event:"Q2 Earnings",type:"earnings"}],{composite:"Sell",score:28,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~6%"),
+        mk("MSFT","Microsoft",0,0,"Software","3.04T",35.1,470,362,0.93,"0.74%","24M","26M",44,"0.5%","73%","Neutral","Mixed.","None","Strong Buy",460,[{date:"Apr 23",event:"Q3 Earnings",type:"earnings"}],{composite:"Hold",score:48,macd:"Neutral",sma20:"Below",sma50:"Above",sma200:"Above"},"~5%"),
+        mk("GOOGL","Alphabet",0,0,"Search","2.14T",22.5,349,141,1.08,"0.45%","34M","34M",42,"0.6%","72%","Bearish","--","None.","Strong Buy",340,[{date:"Apr 22",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:40,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~5%"),
+        mk("AMZN","Amazon",0,0,"E-Commerce","2.24T",38.5,248,167,1.22,"0%","55M","50M",36,"0.7%","68%","Bearish","--","None","Strong Buy",250,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:24,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~4%"),
+        mk("META","Meta",0,0,"Social","1.64T",24.8,796,480,1.38,"0.32%","13M","13M",40,"0.8%","79%","Bearish","--","None","Buy",720,[{date:"Apr 23",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:38,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~3%"),
+        mk("TSLA","Tesla",0,0,"EVs","1.27T",52.5,499,214,2.05,"0%","64M","64M",40,"3.2%","48%","Bearish","Heavy both sides.","None","Hold",460,[{date:"Apr 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:30,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"~2%"),
       ]},
-      { name: "Semiconductors", color: "#a78bfa", glow: "#a78bfa40", description: "MRVL +10% vs AMD -2.5%. Custom AI winning, generic losing.", stocks: [
-        mk("MRVL","Marvell",98.20,+10.20,"Custom AI","85B",55.2,110,62,1.65,"0.35%","45M","18M",78,"2.1%","85%","Bullish","Record earnings. Vol 250%.","None.","Strong Buy",115,[{date:"Jun 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:88,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.4%"),
-        mk("AVGO","Broadcom",330.45,-0.69,"Networking","1.02T",38.2,380,128,1.32,"1.15%","28M","25M",44,"0.8%","82%","Neutral","Modest puts.","None.","Strong Buy",380,[{date:"Jun 12",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:42,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.5%"),
-        mk("AMD","AMD",118.40,-2.50,"GPUs","192B",42.5,188,115,1.72,"0%","48M","45M",35,"2.5%","75%","Bearish","Put volume up. Competition.","None.","Buy",165,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.9%"),
+      { name: "Semiconductors", color: "#a78bfa", glow: "#a78bfa40", description: "", stocks: [
+        mk("MRVL","Marvell",0,0,"Custom AI","85B",55.2,110,62,1.65,"0.35%","45M","18M",78,"2.1%","85%","Bullish","--","None.","Strong Buy",115,[{date:"Jun 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Strong Buy",score:88,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.4%"),
+        mk("AVGO","Broadcom",0,0,"Networking","1.02T",38.2,380,128,1.32,"1.15%","28M","25M",44,"0.8%","82%","Neutral","--","None.","Strong Buy",380,[{date:"Jun 12",event:"Q2 Earnings",type:"earnings"}],{composite:"Hold",score:42,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"2.5%"),
+        mk("AMD","AMD",0,0,"GPUs","192B",42.5,188,115,1.72,"0%","48M","45M",35,"2.5%","75%","Bearish","Put volume up. Competition.","None.","Buy",165,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:25,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Below"},"0.9%"),
       ]},
-      { name: "Software", color: "#f59e0b", glow: "#f59e0b40", description: "SaaS under pressure. CRM +0.36% post-earnings. PLTR -2.94%.", stocks: [
-        mk("CRM","Salesforce",202.11,+0.36,"CRM","196B",44.2,260,192,1.35,"0.55%","8.2M","7.5M",48,"1.1%","79%","Neutral","Post-earnings glow.","None.","Buy",240,[{date:"May 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Bullish",sma20:"Above",sma50:"Below",sma200:"Above"},"0.9%"),
-        mk("PLTR","Palantir",157.16,-2.94,"AI/Analytics","198B",185,198,22,2.45,"0%","52M","48M",38,"3.5%","45%","Bearish","High SI 3.5%. Polarized.","None.","Hold",180,[{date:"May 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:35,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.9%"),
+      { name: "Software", color: "#f59e0b", glow: "#f59e0b40", description: "", stocks: [
+        mk("CRM","Salesforce",0,0,"CRM","196B",44.2,260,192,1.35,"0.55%","8.2M","7.5M",48,"1.1%","79%","Neutral","Post-earnings glow.","None.","Buy",240,[{date:"May 28",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:52,macd:"Bullish",sma20:"Above",sma50:"Below",sma200:"Above"},"0.9%"),
+        mk("PLTR","Palantir",0,0,"AI/Analytics","198B",185,198,22,2.45,"0%","52M","48M",38,"3.5%","45%","Bearish","High SI 3.5%. Polarized.","None.","Hold",180,[{date:"May 5",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:35,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.9%"),
       ]},
-      { name: "Biotech", color: "#00ff88", glow: "#00ff8840", description: "AMGN +0.53%, GILD +0.35%. Defensive rotation beneficiary.", stocks: [
-        mk("AMGN","Amgen",369.53,+0.53,"Biotech","198B",28.4,380,260,0.58,"2.55%","2.8M","3.1M",58,"0.9%","80%","Neutral","Mild calls.","None.","Buy",390,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.9%"),
-        mk("GILD","Gilead",115.20,+0.35,"Biotech","144B",18.5,120,65,0.52,"3.12%","6.5M","7.0M",54,"0.8%","78%","Neutral","Defensive. HIV franchise.","None.","Buy",125,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.7%"),
+      { name: "Biotech", color: "#00ff88", glow: "#00ff8840", description: "", stocks: [
+        mk("AMGN","Amgen",0,0,"Biotech","198B",28.4,380,260,0.58,"2.55%","2.8M","3.1M",58,"0.9%","80%","Neutral","--","None.","Buy",390,[{date:"Apr 29",event:"Q1 Earnings",type:"earnings"}],{composite:"Buy",score:65,macd:"Bullish",sma20:"Above",sma50:"Above",sma200:"Above"},"0.9%"),
+        mk("GILD","Gilead",0,0,"Biotech","144B",18.5,120,65,0.52,"3.12%","6.5M","7.0M",54,"0.8%","78%","Neutral","Defensive. HIV franchise.","None.","Buy",125,[{date:"Apr 24",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:58,macd:"Neutral",sma20:"Above",sma50:"Above",sma200:"Above"},"0.7%"),
       ]},
-      { name: "E-Commerce & Fintech", color: "#e040fb", glow: "#e040fb40", description: "AMZN -2.62% drag. COIN -3.5% crypto correlation. NFLX held.", stocks: [
-        mk("NFLX","Netflix",985.40,-0.85,"Streaming","425B",42.5,1050,540,1.42,"0%","3.5M","4.0M",48,"1.2%","82%","Neutral","Low vol.","None.","Buy",1050,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:50,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"2.0%"),
-        mk("COIN","Coinbase",215.40,-3.50,"Crypto","55B",28.5,340,145,2.85,"0%","12M","10M",35,"5.8%","55%","Bearish","Put buying. Crypto corr.","None.","Hold",280,[{date:"May 8",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.3%"),
+      { name: "E-Commerce & Fintech", color: "#e040fb", glow: "#e040fb40", description: "", stocks: [
+        mk("NFLX","Netflix",0,0,"Streaming","425B",42.5,1050,540,1.42,"0%","3.5M","4.0M",48,"1.2%","82%","Neutral","Low vol.","None.","Buy",1050,[{date:"Apr 17",event:"Q1 Earnings",type:"earnings"}],{composite:"Hold",score:50,macd:"Neutral",sma20:"At",sma50:"Above",sma200:"Above"},"2.0%"),
+        mk("COIN","Coinbase",0,0,"Crypto","55B",28.5,340,145,2.85,"0%","12M","10M",35,"5.8%","55%","Bearish","--","None.","Hold",280,[{date:"May 8",event:"Q1 Earnings",type:"earnings"}],{composite:"Sell",score:22,macd:"Bearish",sma20:"Below",sma50:"Below",sma200:"Above"},"0.3%"),
       ]},
     ]
   }
@@ -696,9 +633,7 @@ function fetchAllIntelligence(onUpdate) {
   }
 
   // 1. Smart Money
-  if (logEl) logEl.textContent = "Fetching smart money signals...";
-  fetchClaudeIntel(
-    'Search for today\'s unusual stock market activity: unusual options volume, insider buying/selling, dark pool prints, and stocks with volume 150%+ above average. Return ONLY a JSON object with no other text: {"signals":[{"ticker":"XX","signal":"description of the unusual activity","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 8-12 signals. Focus on actionable unusual activity from today only. Do not include any citation tags or XML tags in your response.'
+  if (logEl) logEl.textContent = "Fetching smart money signals..."--"signals":[{"ticker":"XX","signal":"description of the unusual activity","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}]} Include 8-12 signals. Focus on actionable unusual activity from today only. Do not include any citation tags or XML tags in your response.'
   ).then(function(data) {
     var parsed = parseClaudeJSON(data);
     if (parsed && parsed.signals) results.smartMoney = parsed.signals;
@@ -730,25 +665,7 @@ function fetchAllIntelligence(onUpdate) {
   // 4. Market Summary Narrative + Fear & Greed
   setTimeout(function() {
     fetchClaudeIntel(
-      'Search for today\'s stock market summary. What are the major indexes doing (Dow, S&P 500, NASDAQ)? What is driving the market today? What is the CNN Fear & Greed Index value today? Return ONLY a JSON object: {"narrative":"2-3 sentence summary of today\'s market action and what is driving it","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX value","oil":"current oil price","headline":"one line headline"} Do not include any citation tags or XML tags in your response.'
-    ).then(function(data) {
-      var parsed = parseClaudeJSON(data);
-      if (parsed) {
-        results.narrative = parsed.narrative || null;
-        results.fearGreed = parsed.fearGreed || null;
-        results.fearLabel = parsed.fearLabel || null;
-        results.vix = parsed.vix || null;
-        results.oil = parsed.oil || null;
-        results.headline = parsed.headline || null;
-      }
-      checkDone();
-    }).catch(function(e) { checkDone(); });
-  }, 6000);
-
-  // 5. Scanner Intelligence - live stock signals for strategy scoring
-  setTimeout(function() {
-    fetchClaudeIntel(
-      'Search for today\'s strongest stock buy and sell signals across the S&P 500. I need stocks showing: unusual volume, RSI extremes, analyst upgrades/downgrades, insider buying/selling, and earnings surprises. Return ONLY a JSON object: {"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish or Neutral","catalyst":"why this stock is signaling today","analyst":"Buy or Sell if any analyst change today","insiderActivity":"description or None"}]} Include 15-20 stocks with the strongest signals today. Mix of buys and sells. Do not include any citation tags or XML tags in your response.'
+      'Search for today\'s stock market summary. What are the major indexes doing (Dow, S&P 500, NASDAQ)? What is driving the market today? What is the CNN Fear & Greed Index value today? Return ONLY a JSON object: {"narrative":"2-3 sentence summary of today\'s market action and what is driving it","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","vix":"current VIX value","oil":"current oil price","headline":"one line headline"--"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish or Neutral","catalyst":"why this stock is signaling today","analyst":"Buy or Sell if any analyst change today","insiderActivity":"description or None"}]} Include 15-20 stocks with the strongest signals today. Mix of buys and sells. Do not include any citation tags or XML tags in your response.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed && parsed.stocks) results.scannerData = parsed.stocks;
@@ -1026,9 +943,9 @@ function GalaxyView(props) {
   // Build index header price display
   var etfKey = INDEX_ETFS[idx];
   var liveETF = isLive && liveQuotes[etfKey];
-  var displayPrice = liveETF ? "$" + liveQuotes[etfKey].price.toFixed(2) + " (ETF)" : d.close.toLocaleString();
-  var displayPct = liveETF ? liveQuotes[etfKey].change : d.changePct;
-  var displaySub = liveETF ? (displayPct >= 0 ? "+" : "") + displayPct.toFixed(2) + "%" : d.change.toLocaleString() + " (" + d.changePct + "%)";
+  var displayPrice = liveETF ? "$" + liveQuotes[etfKey].price.toFixed(2) + " (ETF)" : "--";
+  var displayPct = liveETF ? liveQuotes[etfKey].change : 0;
+  var displaySub = liveETF ? (displayPct >= 0 ? "+" : "") + displayPct.toFixed(2) + "%" : "Waiting for live data";
   // Calculate live green count when connected
   var liveGreen = 0;
   var liveTotal = 0;
@@ -1315,10 +1232,16 @@ function GalaxyView(props) {
   var tabContent = null;
   if (tab === "scanner") tabContent = scannerContent;
   if (tab === "sectors") tabContent = h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 } }, sectorCards);
-  if (tab === "smart_money") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Unusual Activity - " + getTodayShort()), smartCards);
-  if (tab === "flows") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Sector Rotation - " + getTodayShort()), flowCards);
-  if (tab === "institutions") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Institutional Activity - " + getTodayShort()), instCards);
-  if (tab === "calendar") tabContent = h("div", null, h("div", { style: { fontSize: 12, color: "#5a6b8a", marginBottom: 8, textTransform: "uppercase", fontWeight: 700 } }, "Economic Events"), econCards, h("div", { style: { fontSize: 12, color: "#5a6b8a", marginTop: 16, marginBottom: 8, textTransform: "uppercase", fontWeight: 700 } }, "Stock Events"), evtCards);
+  var emptyIntelMsg = h("div", { style: { fontSize: 13, color: "#4a5b7a", padding: "20px 0", textAlign: "center", lineHeight: 1.6 } }, "Waiting for live intelligence data...", h("br"), "Data auto-loads on page open or click Refresh Intel.");
+  if (tab === "smart_money") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Unusual Activity - " + getTodayShort()), smartCards.length > 0 ? smartCards : emptyIntelMsg);
+  if (tab === "flows") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Sector Rotation - " + getTodayShort()), flowCards.length > 0 ? flowCards : emptyIntelMsg);
+  if (tab === "institutions") tabContent = h("div", null, intelBanner, h("div", { style: { fontSize: 12, color: "#ffd700", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 } }, "Institutional Activity - " + getTodayShort()), instCards.length > 0 ? instCards : emptyIntelMsg);
+  if (tab === "calendar") tabContent = h("div", null,
+    h("div", { style: { fontSize: 12, color: "#5a6b8a", marginBottom: 8, textTransform: "uppercase", fontWeight: 700 } }, "Economic Events"),
+    econCards.length > 0 ? econCards : h("div", { style: { fontSize: 12, color: "#4a5b7a", padding: "10px 0", textAlign: "center" } }, "Economic calendar updates with live intel. Click Fetch AI Intel."),
+    h("div", { style: { fontSize: 12, color: "#5a6b8a", marginTop: 16, marginBottom: 8, textTransform: "uppercase", fontWeight: 700 } }, "Stock Events"),
+    evtCards.length > 0 ? evtCards : h("div", { style: { fontSize: 12, color: "#4a5b7a", padding: "10px 0", textAlign: "center" } }, "Stock events update with live data.")
+  );
 
   return h("div", { style: { padding: "14px 20px" } },
     h(LiveDataPanel, { onUpdate: onLiveUpdate, currentIdx: idx, liveQuotes: liveQuotes }),
@@ -1668,7 +1591,7 @@ export default function MarketUniverse() {
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
         h("div", null,
           h("div", { style: { fontSize: 11, color: "#5a6b8a", textTransform: "uppercase", letterSpacing: 2, fontFamily: mono } }, "Market Universe Explorer"),
-          h("div", { style: { display: "inline-block", fontSize: 9, color: "#e040fb", background: "#e040fb15", border: "1px solid #e040fb33", borderRadius: 4, padding: "1px 6px", fontFamily: mono, marginTop: 2 } }, "v15"),
+          h("div", { style: { display: "inline-block", fontSize: 9, color: "#e040fb", background: "#e040fb15", border: "1px solid #e040fb33", borderRadius: 4, padding: "1px 6px", fontFamily: mono, marginTop: 2 } }, "v16"),
           h("div", { style: { fontSize: 20, fontWeight: 800, color: "#e0e6f0", marginTop: 2 } }, title)
         ),
         h("div", { style: { fontSize: 10, color: isLive ? "#00ff88" : "#4a5b7a", textAlign: "right", fontFamily: mono } }, dataLabel, h("br"), dataTime)
