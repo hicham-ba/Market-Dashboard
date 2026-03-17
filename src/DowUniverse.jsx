@@ -828,28 +828,38 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
     var sig = st.signals || {};
     var live = liveSignals[st.ticker];
     var score = 0; var reasons = [];
+    var currentPrice = lp(st.ticker, st.price);
+    var currentChange = lc(st.ticker, st.change);
 
-    // Use live signals when available, otherwise static
-    var action = live ? live.action : sig.composite;
+    // Recalculate MA positions using LIVE price against estimated MAs
+    var mas = st.mas || {};
+    var above200 = mas.sma200 ? currentPrice > mas.sma200 : (sig.sma200 === "Above");
+    var above50 = mas.sma50 ? currentPrice > mas.sma50 : (sig.sma50 === "Above");
+    var maBullCount = 0;
+    ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && currentPrice > mas[k]) maBullCount++; });
+
+    // Derive live composite: if price below most MAs = Sell, above most = Buy
+    var liveComposite = maBullCount >= 4 ? "Buy" : maBullCount >= 3 ? "Hold" : maBullCount >= 1 ? "Sell" : "Strong Sell";
+    var action = live ? live.action : liveComposite;
     var isSellSignal = action === "Sell" || action === "Strong Sell";
-    var above200 = sig.sma200 === "Above"; // Keep static MA position
+
     var analyst = live ? (live.analyst || st.analystRating) : st.analystRating;
     var isQuality = analyst === "Buy" || analyst === "Strong Buy";
     var instHigh = parseFloat(st.instOwn) >= 65;
-    var currentPrice = lp(st.ticker, st.price);
     var targetUpside = st.priceTarget > 0 ? ((st.priceTarget - currentPrice) / currentPrice * 100) : 0;
     var rsi = live ? (live.rsi || st.rsi) : st.rsi;
 
     if (isFearEnv) { score++; reasons.push("F&G " + fearGreed + (hasLiveIntel ? " (live)" : "")); }
-    if (isSellSignal && above200) { score += 2; reasons.push("Oversold but above 200-day"); }
+    if (isSellSignal && above200) { score += 2; reasons.push(action + " but above 200-day ($" + (mas.sma200 || 0).toFixed(0) + ")"); }
     if (isQuality) { score++; reasons.push("Analyst " + analyst + (live && live.analyst ? " (live)" : "")); }
     if (instHigh) { score++; reasons.push(st.instOwn + " inst owned"); }
     if (targetUpside >= 15) { score++; reasons.push("Target $" + st.priceTarget + " (+" + targetUpside.toFixed(0) + "%)"); }
     if (rsi && rsi < 35) { score++; reasons.push("RSI " + rsi + " oversold" + (live && live.rsi ? " (live)" : "")); }
 
     if (score >= 4 && isSellSignal && above200) {
+      reasons.push(maBullCount + "/5 MAs bullish at $" + currentPrice.toFixed(2));
       reasons.push(item.index);
-      results.fear.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, index: item.index });
+      results.fear.push({ ticker: st.ticker, name: st.name, price: currentPrice, change: currentChange, score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, index: item.index });
     }
   });
 
@@ -878,25 +888,29 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
     var live = liveSignals[st.ticker];
     var sm = smartTickers[st.ticker];
     var score = 0; var reasons = [];
+    var currentPrice = lp(st.ticker, st.price);
+    var currentChange = lc(st.ticker, st.change);
 
-    var isGreenOnRed = lc(st.ticker, st.change) > 0 && worstPct < 0;
+    var isGreenOnRed = currentChange > 0 && worstPct < 0;
     var volHigh = parseFloat(st.volume) > parseFloat(st.avgVol) * 1.3;
     if (live && live.volume_vs_avg) volHigh = parseFloat(live.volume_vs_avg) > 130;
     var mas = st.mas || {};
     var maBulls = 0;
-    ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && st.price > mas[k]) maBulls++; });
+    ["sma5","sma10","sma20","sma50","sma200"].forEach(function(k) { if (mas[k] && currentPrice > mas[k]) maBulls++; });
 
-    var action = live ? live.action : sig.composite;
+    // Derive live composite from MA alignment
+    var liveComposite = maBulls >= 4 ? "Buy" : maBulls >= 3 ? "Hold" : maBulls >= 1 ? "Sell" : "Strong Sell";
+    var action = live ? live.action : liveComposite;
 
     if (sm) { score += 2; reasons.push("Smart Money: " + (sm.signal || sm.description || sm.type).substring(0, 50) + (hasLiveIntel ? " (live)" : "")); }
     if (isGreenOnRed) { score += 2; reasons.push("GREEN on red day"); }
     if (volHigh) { score++; reasons.push("Vol above avg" + (live && live.volume_vs_avg ? " " + live.volume_vs_avg + " (live)" : "")); }
-    if (maBulls >= 3) { score++; reasons.push(maBulls + "/5 MAs bullish"); }
-    if (action === "Buy" || action === "Strong Buy") { score++; reasons.push("Signal: " + action + (live ? " (live)" : "")); }
+    if (maBulls >= 3) { score++; reasons.push(maBulls + "/5 MAs bullish at $" + currentPrice.toFixed(2)); }
+    if (action === "Buy" || action === "Strong Buy") { score++; reasons.push("Signal: " + action); }
 
     if (score >= 3 && (sm || isGreenOnRed)) {
       reasons.push(item.index);
-      results.smartFollow.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, maBulls: maBulls, index: item.index });
+      results.smartFollow.push({ ticker: st.ticker, name: st.name, price: currentPrice, change: currentChange, score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, maBulls: maBulls, index: item.index });
     }
   });
 
@@ -944,6 +958,8 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
       var rsi = st.rsi || 50;
       var live = liveSignals[st.ticker];
       if (live && live.rsi) rsi = live.rsi;
+      var currentPrice = lp(st.ticker, st.price);
+      var currentChange = lc(st.ticker, st.change);
 
       if (match && rsi < 70 && !rotSeen[st.ticker]) {
         rotSeen[st.ticker] = true;
@@ -954,14 +970,14 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
         if (rot.instConfirm >= 3) { score += 2; reasons.push(rot.instConfirm + " institutions confirm"); }
         else if (rot.instConfirm >= 1) { score += 1; reasons.push(rot.instConfirm + " institution confirms"); }
         if (rsi < 50) { score++; reasons.push("RSI " + rsi + (live && live.rsi ? " (live)" : "")); }
-        if (lc(st.ticker, st.change) > 0 && worstPct < 0) { score++; reasons.push("Green on red day"); }
+        if (currentChange > 0 && worstPct < 0) { score++; reasons.push("Green on red day"); }
         var mas2 = st.mas || {};
         var mab = 0;
-        ["sma20","sma50","sma200"].forEach(function(k) { if (mas2[k] && st.price > mas2[k]) mab++; });
-        if (mab >= 2) { score++; reasons.push(mab + "/3 key MAs bullish"); }
+        ["sma20","sma50","sma200"].forEach(function(k) { if (mas2[k] && currentPrice > mas2[k]) mab++; });
+        if (mab >= 2) { score++; reasons.push(mab + "/3 key MAs bullish at $" + currentPrice.toFixed(2)); }
         rot.drivers.forEach(function(dr) { reasons.push("Driver: " + dr); });
         reasons.push(item.index);
-        results.rotation.push({ ticker: st.ticker, name: st.name, price: lp(st.ticker, st.price), change: lc(st.ticker, st.change), score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: rsi, index: item.index });
+        results.rotation.push({ ticker: st.ticker, name: st.name, price: currentPrice, change: currentChange, score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, flow: rot.flow, rsi: rsi, index: item.index });
       }
     });
   });
