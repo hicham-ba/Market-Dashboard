@@ -659,7 +659,8 @@ function fetchAllIntelligence(onUpdate) {
     if (logEl) logEl.textContent = "Loaded " + done + "/" + total + " intel feeds";
     if (done === total) {
       results.timestamp = getETNow();
-      if (logEl) logEl.textContent = "Intel loaded at " + results.timestamp + " ET (~$0.05)";
+      var macroHits = [results.nfp ? "NFP" : "", results.unemployment ? "UNEMP" : "", results.putCallRatio ? "P/C" : "", results.oil ? "OIL" : "", results.tenYear ? "10Y" : "", results.dxy ? "DXY" : ""].filter(Boolean).join(",");
+      if (logEl) logEl.textContent = "Intel loaded " + results.timestamp + " ET | Macro: " + (macroHits || "none") + " | ~$0.05";
       if (onUpdate) onUpdate(results);
     }
   }
@@ -670,30 +671,28 @@ function fetchAllIntelligence(onUpdate) {
     'Search for today\'s stock market activity and current market data. Return ONLY a JSON object: {"signals":[{"ticker":"XX","signal":"description","type":"Accumulation or Distribution or Insider Buy or Insider Sell","color":"#00ff88 for bullish or #ff4d4d for bearish"}],"flows":[{"from":"Sector losing","to":"Sector gaining","flow":"$X.XB","label":"why","drivers":["driver1","driver2"]}],"institutions":[{"name":"Fund Name","aum":"$X.XT","move":"what they did","signal":"Risk-Off or Rotate or Defensive","color":"#hex"}],"macro":{"vix":number,"oil":number,"gold":number,"tenYear":number,"tltPrice":number,"nfp":"string like +200K","unemployment":"string like 4.4%","putCallRatio":number,"dxy":number}} For signals: 8-10 unusual options or insider trades today. For flows: 4-6 sector rotations. For institutions: 6-8 major fund moves. For macro: current VIX index level, WTI crude oil price per barrel, gold price per troy ounce, 10-year Treasury yield, TLT ETF price, latest nonfarm payrolls, unemployment rate, CBOE equity put/call ratio, US Dollar Index. No citation or XML tags.'
   ).then(function(data) {
     var parsed = parseClaudeJSON(data);
+    if (logEl) logEl.textContent = "Call 1 parsed: " + (parsed ? Object.keys(parsed).join(",") : "null");
     if (parsed) {
       if (parsed.signals) results.smartMoney = parsed.signals;
       if (parsed.flows) results.flows = parsed.flows;
       if (parsed.institutions) results.institutions = parsed.institutions;
-      if (parsed.macro) {
-        results.vix = parsed.macro.vix || null;
-        results.oil = parsed.macro.oil || null;
-        results.gold = parsed.macro.gold || null;
-        results.tenYear = parsed.macro.tenYear || null;
-        results.tltPrice = parsed.macro.tltPrice || null;
-        results.nfp = parsed.macro.nfp || null;
-        results.unemployment = parsed.macro.unemployment || null;
-        results.putCallRatio = parsed.macro.putCallRatio || null;
-        results.dxy = parsed.macro.dxy || null;
-      }
-      // Also check if macro fields were returned at root level
-      if (!results.vix && parsed.vix) results.vix = parsed.vix;
-      if (!results.oil && parsed.oil) results.oil = parsed.oil;
-      if (!results.gold && parsed.gold) results.gold = parsed.gold;
-      if (!results.tenYear && parsed.tenYear) results.tenYear = parsed.tenYear;
-      if (!results.nfp && parsed.nfp) results.nfp = parsed.nfp;
-      if (!results.unemployment && parsed.unemployment) results.unemployment = parsed.unemployment;
-      if (!results.putCallRatio && parsed.putCallRatio) results.putCallRatio = parsed.putCallRatio;
-      if (!results.dxy && parsed.dxy) results.dxy = parsed.dxy;
+      // Check for macro as nested object
+      var m = parsed.macro || parsed.macroData || parsed.market_data || {};
+      // Merge macro fields from nested object OR root level
+      var sources = [m, parsed];
+      sources.forEach(function(src) {
+        if (!src) return;
+        if (src.vix != null && results.vix == null) results.vix = src.vix;
+        if (src.oil != null && results.oil == null) results.oil = src.oil;
+        if (src.gold != null && results.gold == null) results.gold = src.gold;
+        if (results.tenYear == null) { var ty = src.tenYear || src.ten_year; if (ty != null) results.tenYear = ty; }
+        if (results.tltPrice == null) { var tp = src.tltPrice || src.tlt_price || src.tlt; if (tp != null) results.tltPrice = tp; }
+        if (src.nfp != null && results.nfp == null) results.nfp = src.nfp;
+        if (results.unemployment == null) { var ue = src.unemployment || src.unemploymentRate; if (ue != null) results.unemployment = ue; }
+        if (results.putCallRatio == null) { var pc = src.putCallRatio || src.put_call_ratio || src.pcRatio; if (pc != null) results.putCallRatio = pc; }
+        if (src.dxy != null && results.dxy == null) results.dxy = src.dxy;
+      });
+      if (logEl) logEl.textContent = "Call 1 done. Macro: nfp=" + results.nfp + " unemp=" + results.unemployment + " pc=" + results.putCallRatio;
     }
     checkDone();
   }).catch(function(e) {
@@ -705,15 +704,21 @@ function fetchAllIntelligence(onUpdate) {
   setTimeout(function() {
     if (logEl) logEl.textContent = "Fetching scanner intelligence (2/2)...";
     fetchClaudeIntel(
-      'Search for today\'s stock market summary and strongest stock signals. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","headline":"one line headline","stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For narrative: what are Dow, S&P, Nasdaq doing today and why, CNN Fear and Greed value. For stocks: find 15-20 with strongest signals today (unusual volume, analyst changes, insider trades, RSI extremes). Mix buys and sells. No citation or XML tags.'
+      'Search for today\'s stock market summary and strongest stock signals. Also get current macro data. Return ONLY a JSON object: {"narrative":"2-3 sentence market summary","fearGreed":number_0_to_100,"fearLabel":"Extreme Fear or Fear or Neutral or Greed or Extreme Greed","headline":"one line headline","nfp":"latest nonfarm payrolls like +200K or -92K","unemployment":"unemployment rate like 4.4%","putCallRatio":number_like_1.24,"oil":number_WTI_per_barrel,"tenYear":number_like_4.15,"stocks":[{"ticker":"XX","action":"Strong Buy or Buy or Sell or Strong Sell","rsi":number,"volume_vs_avg":"150%","sentiment":"Bullish or Bearish","catalyst":"reason","analyst":"Buy or Sell or None","insiderActivity":"description or None"}]} For narrative: what are Dow, S&P, Nasdaq doing today and why, CNN Fear and Greed value. Include current NFP, unemployment rate, CBOE put/call ratio, WTI oil per barrel, 10Y yield. For stocks: find 15-20 with strongest signals. Mix buys and sells. No citation or XML tags.'
     ).then(function(data) {
       var parsed = parseClaudeJSON(data);
       if (parsed) {
-        results.narrative = parsed.narrative || null;
-        results.fearGreed = parsed.fearGreed || null;
-        results.fearLabel = parsed.fearLabel || null;
-        results.headline = parsed.headline || null;
+        if (parsed.narrative != null) results.narrative = parsed.narrative;
+        if (parsed.fearGreed != null) results.fearGreed = parsed.fearGreed;
+        if (parsed.fearLabel != null) results.fearLabel = parsed.fearLabel;
+        if (parsed.headline != null) results.headline = parsed.headline;
         if (parsed.stocks) results.scannerData = parsed.stocks;
+        // Backup macro fields - fill in anything Call 1 missed
+        if (parsed.nfp != null && results.nfp == null) results.nfp = parsed.nfp;
+        if (results.unemployment == null) results.unemployment = parsed.unemployment || parsed.unemploymentRate || null;
+        if (results.putCallRatio == null) results.putCallRatio = parsed.putCallRatio || parsed.put_call_ratio || null;
+        if (parsed.oil != null && results.oil == null) results.oil = parsed.oil;
+        if (results.tenYear == null) results.tenYear = parsed.tenYear || parsed.ten_year || null;
       }
       checkDone();
     }).catch(function(e) {
@@ -791,7 +796,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
   }
 
   // Use live Fear & Greed or fall back to static
-  var fearGreed = (intel.fearGreed && intel.fearGreed > 0) ? intel.fearGreed : macro.fearGreed;
+  var fearGreed = (intel.fearGreed != null && intel.fearGreed !== "") ? Number(intel.fearGreed) : macro.fearGreed;
 
   var totalStocks = allStocks.length;
   var results = { fear: [], smartFollow: [], rotation: [], totalScanned: totalStocks, isLiveIntel: hasLiveIntel };
@@ -1022,19 +1027,19 @@ function GalaxyView(props) {
   var uupChg = isLive && liveQuotes["UUP"] ? liveQuotes["UUP"].change : 0;
 
   var tileData = [
-    { l: "VIX", v: liveVIXY > 0 ? liveVIXY.toFixed(2) : (liveIntel && liveIntel.vix ? String(liveIntel.vix) : "--"), chg: vixyChg, sub: liveVIXY > 0 ? "VIXY ETF (live)" : "", goodUp: false },
-    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : (liveUSO > 0 ? "$" + liveUSO.toFixed(2) + " (USO)" : "--"), chg: usoChg, sub: liveUSO > 0 ? "USO " + (usoChg >= 0 ? "+" : "") + usoChg.toFixed(2) + "%" : "", goodUp: true },
-    { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear) ? liveIntel.tenYear + "%" : (liveTLT > 0 ? "TLT $" + liveTLT.toFixed(2) : "--"), chg: -tltChg, sub: liveTLT > 0 ? "TLT " + (tltChg >= 0 ? "+" : "") + tltChg.toFixed(2) + "% (yield inv.)" : "", goodUp: false },
-    { l: "NFP", v: (liveIntel && liveIntel.nfp) ? String(liveIntel.nfp) : "--", chg: 0, sub: "", goodUp: true },
-    { l: "UNEMP", v: (liveIntel && liveIntel.unemployment) ? String(liveIntel.unemployment) : "--", chg: 0, sub: "", goodUp: false },
-    { l: "P/C RATIO", v: (liveIntel && liveIntel.putCallRatio) ? String(liveIntel.putCallRatio) : "--", chg: 0, sub: "", goodUp: false },
-    { l: "DXY", v: (liveIntel && liveIntel.dxy) ? String(liveIntel.dxy) : (liveUUP > 0 ? liveUUP.toFixed(2) + " (UUP)" : "--"), chg: uupChg, sub: liveUUP > 0 ? "UUP " + (uupChg >= 0 ? "+" : "") + uupChg.toFixed(2) + "%" : "", goodUp: false },
-    { l: "GOLD /oz", v: estGold > 0 ? "$" + estGold.toLocaleString() : (liveIntel && liveIntel.gold ? "$" + parseFloat(liveIntel.gold).toLocaleString() : "--"), chg: gldChg, sub: liveGLD > 0 ? "GLD $" + liveGLD.toFixed(2) + " (" + (gldChg >= 0 ? "+" : "") + gldChg.toFixed(2) + "%)" : "", goodUp: true },
+    { l: "VIX", v: liveVIXY > 0 ? liveVIXY.toFixed(2) : (liveIntel && liveIntel.vix != null ? String(liveIntel.vix) : "--"), chg: vixyChg, sub: liveVIXY > 0 ? "VIXY ETF (live)" : "", goodUp: false },
+    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil != null) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : (liveUSO > 0 ? "$" + liveUSO.toFixed(2) + " (USO)" : "--"), chg: usoChg, sub: liveUSO > 0 ? "USO " + (usoChg >= 0 ? "+" : "") + usoChg.toFixed(2) + "%" : "", goodUp: true },
+    { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear != null) ? liveIntel.tenYear + "%" : (liveTLT > 0 ? "TLT $" + liveTLT.toFixed(2) : "--"), chg: -tltChg, sub: liveTLT > 0 ? "TLT " + (tltChg >= 0 ? "+" : "") + tltChg.toFixed(2) + "% (yield inv.)" : "", goodUp: false },
+    { l: "NFP", v: (liveIntel && liveIntel.nfp != null) ? String(liveIntel.nfp) : "--", chg: 0, sub: "", goodUp: true },
+    { l: "UNEMP", v: (liveIntel && liveIntel.unemployment != null) ? String(liveIntel.unemployment) : "--", chg: 0, sub: "", goodUp: false },
+    { l: "P/C RATIO", v: (liveIntel && liveIntel.putCallRatio != null) ? String(liveIntel.putCallRatio) : "--", chg: 0, sub: "", goodUp: false },
+    { l: "DXY", v: (liveIntel && liveIntel.dxy != null) ? String(liveIntel.dxy) : (liveUUP > 0 ? liveUUP.toFixed(2) + " (UUP)" : "--"), chg: uupChg, sub: liveUUP > 0 ? "UUP " + (uupChg >= 0 ? "+" : "") + uupChg.toFixed(2) + "%" : "", goodUp: false },
+    { l: "GOLD /oz", v: estGold > 0 ? "$" + estGold.toLocaleString() : (liveIntel && liveIntel.gold != null ? "$" + parseFloat(liveIntel.gold).toLocaleString() : "--"), chg: gldChg, sub: liveGLD > 0 ? "GLD $" + liveGLD.toFixed(2) + " (" + (gldChg >= 0 ? "+" : "") + gldChg.toFixed(2) + "%)" : "", goodUp: true },
   ];
 
   var macroTiles = tileData.map(function(t) {
     var hasData = t.v !== "--";
-    var fromIntel = hasData && liveIntel && liveIntel.timestamp;
+    var fromIntel = hasData && liveIntel && liveIntel.timestamp != null && liveIntel.timestamp !== "";
     var fromETF = hasData && t.sub && t.sub.indexOf("live") >= 0 || (t.sub && t.sub.length > 0);
     var isLiveData = fromIntel || fromETF;
     var chgColor = t.chg > 0.1 ? (t.goodUp ? "#16a34a" : "#dc2626") : t.chg < -0.1 ? (t.goodUp ? "#dc2626" : "#16a34a") : "#718096";
@@ -1301,14 +1306,31 @@ function GalaxyView(props) {
           h("span", { style: { color: displayPct >= 0 ? "#16a34a" : "#dc2626", fontSize: 16, fontWeight: 700, fontFamily: mono } }, displaySub),
           h("span", { style: { fontSize: 12, color: "#718096", marginLeft: 8 } }, displayInfo)
         ),
-        h("div", { style: { background: "#ffffff", border: "1px solid " + (liveIntel && liveIntel.fearGreed ? "#e040fb33" : "#e0e5ec"), borderRadius: 10, padding: "8px 14px", textAlign: "center" } },
-          h("div", { style: { fontSize: 10, color: liveIntel && liveIntel.fearGreed ? "#e040fb" : "#718096", fontFamily: mono } }, "FEAR & GREED"),
-          h("div", { style: { width: 80, height: 6, borderRadius: 3, background: "linear-gradient(to right,#ff2020,#ff6b35,#ffd700,#00dd66,#00ff88)", position: "relative", margin: "6px 0" } },
-            h("div", { style: { position: "absolute", left: (liveIntel && liveIntel.fearGreed ? liveIntel.fearGreed : MACRO.fearGreed) + "%", top: "50%", transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: "#fff", border: "2px solid " + ((liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 45 ? "#ff6b35" : "#ffd700") } })
+        h("div", (function() {
+          var hasFG = liveIntel && liveIntel.fearGreed != null;
+          var fg = hasFG ? Number(liveIntel.fearGreed) : MACRO.fearGreed;
+          var fgLabel = hasFG && liveIntel.fearLabel ? liveIntel.fearLabel : MACRO.fearLabel;
+          var fgColor = fg <= 25 ? "#dc2626" : fg <= 45 ? "#ea580c" : fg <= 55 ? "#d97706" : fg <= 75 ? "#16a34a" : "#16a34a";
+          return { style: { background: "#ffffff", border: "1px solid " + (hasFG ? "#e040fb33" : "#e0e5ec"), borderRadius: 10, padding: "8px 14px", textAlign: "center" } };
+        })(),
+          h("div", { style: { fontSize: 10, color: (liveIntel && liveIntel.fearGreed != null) ? "#e040fb" : "#718096", fontFamily: mono } }, "FEAR & GREED"),
+          h("div", { style: { width: 80, height: 6, borderRadius: 3, background: "linear-gradient(to right,#dc2626,#ea580c,#d97706,#22c55e,#16a34a)", position: "relative", margin: "6px 0" } },
+            (function() {
+              var fg = (liveIntel && liveIntel.fearGreed != null) ? Number(liveIntel.fearGreed) : MACRO.fearGreed;
+              var fgColor = fg <= 25 ? "#dc2626" : fg <= 45 ? "#ea580c" : "#d97706";
+              return h("div", { style: { position: "absolute", left: fg + "%", top: "50%", transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: "#fff", border: "2px solid " + fgColor } });
+            })()
           ),
-          h("div", { style: { fontSize: 16, fontWeight: 800, color: (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 45 ? "#ff6b35" : "#ffd700", fontFamily: mono } }, liveIntel && liveIntel.fearGreed ? liveIntel.fearGreed : MACRO.fearGreed),
-          h("div", { style: { fontSize: 11, color: (liveIntel && liveIntel.fearGreed || MACRO.fearGreed) <= 25 ? "#ff2020" : "#ff6b35" } }, liveIntel && liveIntel.fearLabel ? liveIntel.fearLabel : MACRO.fearLabel),
-          liveIntel && liveIntel.fearGreed ? h("div", { style: { fontSize: 8, color: "#e040fb", marginTop: 2 } }, "LIVE") : null
+          (function() {
+            var fg = (liveIntel && liveIntel.fearGreed != null) ? Number(liveIntel.fearGreed) : MACRO.fearGreed;
+            var fgLabel = (liveIntel && liveIntel.fearLabel) ? liveIntel.fearLabel : MACRO.fearLabel;
+            var fgColor = fg <= 25 ? "#dc2626" : fg <= 45 ? "#ea580c" : "#d97706";
+            return h("div", null,
+              h("div", { style: { fontSize: 16, fontWeight: 800, color: fgColor, fontFamily: mono } }, fg),
+              h("div", { style: { fontSize: 11, color: fgColor } }, fgLabel),
+              (liveIntel && liveIntel.fearGreed != null) ? h("div", { style: { fontSize: 8, color: "#e040fb", marginTop: 2 } }, "LIVE") : null
+            );
+          })()
         )
       )
     ),
