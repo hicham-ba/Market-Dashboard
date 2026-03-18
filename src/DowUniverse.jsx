@@ -441,7 +441,7 @@ function LiveDataPanel(props) {
 
   useEffect(function() {
     if (autoRefresh && connected && status !== "loading") {
-      intRef.current = setInterval(function() { doFetch(); }, 90000);
+      intRef.current = setInterval(function() { doFetch(); }, 180000);
     }
     return function() { if (intRef.current) clearInterval(intRef.current); };
   }, [autoRefresh, connected]);
@@ -478,17 +478,32 @@ function LiveDataPanel(props) {
     var results = {}; var done = 0; var total = deduped.length;
     var errors = 0;
 
+    // Rate limit: Finnhub free tier = 60 calls/min
+    // Send 55 per batch (leave headroom), pause 62s between batches
+    var BATCH_SIZE = 55;
+    var BATCH_PAUSE = 62000; // ms between batches
+    var CALL_GAP = 150; // ms between calls within a batch
+
+    mueLog("Fetching " + total + " quotes in batches of " + BATCH_SIZE + "...");
+
     deduped.forEach(function(sym, i) {
+      var batchNum = Math.floor(i / BATCH_SIZE);
+      var posInBatch = i % BATCH_SIZE;
+      var delay = (batchNum * BATCH_PAUSE) + (posInBatch * CALL_GAP);
+
       setTimeout(function() {
+        if (posInBatch === 0 && batchNum > 0) {
+          mueLog("Batch " + (batchNum + 1) + " starting (" + done + "/" + total + " done)...");
+        }
         fetchQ(sym).then(function(d) {
           if (d && d.c && d.c > 0) {
             results[sym] = { price: d.c, change: d.dp || 0, dollarChange: d.d || 0, high: d.h, low: d.l, open: d.o, prevClose: d.pc };
           } else if (d && d.error) {
             errors++;
-            mueLog("API error for " + sym + ": " + d.error);
+            if (errors <= 3) mueLog("API error for " + sym + ": " + d.error);
           }
           done++;
-          setMsg("Loaded " + done + "/" + total + (errors > 0 ? " (" + errors + " errors)" : ""));
+          if (done % 20 === 0 || done === total) setMsg("Loaded " + done + "/" + total + (errors > 0 ? " (" + errors + " err)" : ""));
           if (done === total) {
             setStatus("done"); setLastTime(getETNow());
             var count = Object.keys(results).length;
@@ -499,7 +514,7 @@ function LiveDataPanel(props) {
           }
         }).catch(function(err) {
           errors++; done++;
-          mueLog("Fetch error " + sym + ": " + (err.message || err));
+          if (errors <= 3) mueLog("Fetch error " + sym + ": " + (err.message || err));
           if (done === total) {
             setStatus("done"); setLastTime(getETNow());
             var count = Object.keys(results).length;
@@ -508,7 +523,7 @@ function LiveDataPanel(props) {
             if (onUpdate) onUpdate(results);
           }
         });
-      }, i * 250);
+      }, delay);
     });
   }
 
@@ -519,7 +534,7 @@ function LiveDataPanel(props) {
   if (connected) {
     btns.push(h("button", { key: "r", onClick: function() { doFetch(); }, style: { background: "#00ff8812", border: "1px solid #00ff8833", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#16a34a", fontSize: 12, fontWeight: 700, fontFamily: mono } }, status === "loading" ? "Loading..." : "Refresh"));
     if (status === "done") {
-      btns.push(h("button", { key: "a", onClick: function() { setAutoRefresh(!autoRefresh); }, style: { background: autoRefresh ? "#00ff8815" : "#ffffff", border: "1px solid " + (autoRefresh ? "#00ff8844" : "#e0e5ec"), borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: autoRefresh ? "#16a34a" : "#718096", fontSize: 11, fontWeight: 600, fontFamily: mono } }, autoRefresh ? "Auto: ON 90s" : "Auto: OFF"));
+      btns.push(h("button", { key: "a", onClick: function() { setAutoRefresh(!autoRefresh); }, style: { background: autoRefresh ? "#00ff8815" : "#ffffff", border: "1px solid " + (autoRefresh ? "#00ff8844" : "#e0e5ec"), borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: autoRefresh ? "#16a34a" : "#718096", fontSize: 11, fontWeight: 600, fontFamily: mono } }, autoRefresh ? "Auto: ON 3m" : "Auto: OFF"));
     }
   }
 
@@ -992,24 +1007,40 @@ function GalaxyView(props) {
   var displayInfo = isLive ? "Live | " + liveGreen + "/" + liveTotal + " green" : getTodayShort() + " | " + d.greenCount + "/" + d.components + " green";
 
   // Macro tiles - overlay live proxy data when available
-  // Build macro tiles from intel data (real prices) + ETF fallback
+  // Build macro tiles - PREFER live ETF-derived prices (accurate) over Claude intel (can be stale)
+  // GLD ≈ 1/10.28 oz gold, so gold/oz ≈ GLD × 10.28
+  var liveGLD = isLive && liveQuotes["GLD"] ? liveQuotes["GLD"].price : 0;
+  var liveUSO = isLive && liveQuotes["USO"] ? liveQuotes["USO"].price : 0;
+  var liveVIXY = isLive && liveQuotes["VIXY"] ? liveQuotes["VIXY"].price : 0;
+  var liveTLT = isLive && liveQuotes["TLT"] ? liveQuotes["TLT"].price : 0;
+  var liveUUP = isLive && liveQuotes["UUP"] ? liveQuotes["UUP"].price : 0;
+  var estGold = liveGLD > 0 ? Math.round(liveGLD * 10.28) : 0;
+  var gldChg = isLive && liveQuotes["GLD"] ? liveQuotes["GLD"].change : 0;
+  var usoChg = isLive && liveQuotes["USO"] ? liveQuotes["USO"].change : 0;
+  var vixyChg = isLive && liveQuotes["VIXY"] ? liveQuotes["VIXY"].change : 0;
+  var tltChg = isLive && liveQuotes["TLT"] ? liveQuotes["TLT"].change : 0;
+  var uupChg = isLive && liveQuotes["UUP"] ? liveQuotes["UUP"].change : 0;
+
   var tileData = [
-    { l: "VIX", v: (liveIntel && liveIntel.vix) ? String(liveIntel.vix) : (isLive && liveQuotes["VIXY"] ? liveQuotes["VIXY"].price.toFixed(2) + " (VIXY)" : "--") },
-    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : (isLive && liveQuotes["USO"] ? "$" + liveQuotes["USO"].price.toFixed(2) + " (USO)" : "--") },
-    { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear) ? liveIntel.tenYear + "%" : "--", sub: (liveIntel && liveIntel.tltPrice) ? "TLT $" + parseFloat(liveIntel.tltPrice).toFixed(2) : (isLive && liveQuotes["TLT"] ? "TLT $" + liveQuotes["TLT"].price.toFixed(2) : "") },
-    { l: "NFP", v: (liveIntel && liveIntel.nfp) ? String(liveIntel.nfp) : "--" },
-    { l: "UNEMP", v: (liveIntel && liveIntel.unemployment) ? String(liveIntel.unemployment) : "--" },
-    { l: "P/C RATIO", v: (liveIntel && liveIntel.putCallRatio) ? String(liveIntel.putCallRatio) : "--" },
-    { l: "DXY", v: (liveIntel && liveIntel.dxy) ? String(liveIntel.dxy) : (isLive && liveQuotes["UUP"] ? "$" + liveQuotes["UUP"].price.toFixed(2) + " (UUP)" : "--") },
-    { l: "GOLD /oz", v: (liveIntel && liveIntel.gold) ? "$" + parseFloat(liveIntel.gold).toLocaleString() : (isLive && liveQuotes["GLD"] ? "$" + liveQuotes["GLD"].price.toFixed(2) + " (GLD)" : "--") },
+    { l: "VIX", v: liveVIXY > 0 ? liveVIXY.toFixed(2) : (liveIntel && liveIntel.vix ? String(liveIntel.vix) : "--"), chg: vixyChg, sub: liveVIXY > 0 ? "VIXY ETF (live)" : "", goodUp: false },
+    { l: "OIL /bbl", v: (liveIntel && liveIntel.oil) ? "$" + parseFloat(liveIntel.oil).toFixed(2) : (liveUSO > 0 ? "$" + liveUSO.toFixed(2) + " (USO)" : "--"), chg: usoChg, sub: liveUSO > 0 ? "USO " + (usoChg >= 0 ? "+" : "") + usoChg.toFixed(2) + "%" : "", goodUp: true },
+    { l: "10Y YIELD", v: (liveIntel && liveIntel.tenYear) ? liveIntel.tenYear + "%" : (liveTLT > 0 ? "TLT $" + liveTLT.toFixed(2) : "--"), chg: -tltChg, sub: liveTLT > 0 ? "TLT " + (tltChg >= 0 ? "+" : "") + tltChg.toFixed(2) + "% (yield inv.)" : "", goodUp: false },
+    { l: "NFP", v: (liveIntel && liveIntel.nfp) ? String(liveIntel.nfp) : "--", chg: 0, sub: "", goodUp: true },
+    { l: "UNEMP", v: (liveIntel && liveIntel.unemployment) ? String(liveIntel.unemployment) : "--", chg: 0, sub: "", goodUp: false },
+    { l: "P/C RATIO", v: (liveIntel && liveIntel.putCallRatio) ? String(liveIntel.putCallRatio) : "--", chg: 0, sub: "", goodUp: false },
+    { l: "DXY", v: (liveIntel && liveIntel.dxy) ? String(liveIntel.dxy) : (liveUUP > 0 ? liveUUP.toFixed(2) + " (UUP)" : "--"), chg: uupChg, sub: liveUUP > 0 ? "UUP " + (uupChg >= 0 ? "+" : "") + uupChg.toFixed(2) + "%" : "", goodUp: false },
+    { l: "GOLD /oz", v: estGold > 0 ? "$" + estGold.toLocaleString() : (liveIntel && liveIntel.gold ? "$" + parseFloat(liveIntel.gold).toLocaleString() : "--"), chg: gldChg, sub: liveGLD > 0 ? "GLD $" + liveGLD.toFixed(2) + " (" + (gldChg >= 0 ? "+" : "") + gldChg.toFixed(2) + "%)" : "", goodUp: true },
   ];
 
   var macroTiles = tileData.map(function(t) {
     var hasData = t.v !== "--";
     var fromIntel = hasData && liveIntel && liveIntel.timestamp;
-    return h("div", { key: t.l, style: { background: "#ffffff", border: "1px solid " + (fromIntel ? "#9333ea30" : "#e0e5ec"), borderRadius: 10, padding: "8px 12px", minWidth: 95, textAlign: "center", boxShadow: fromIntel ? "0 2px 8px rgba(147,51,234,0.08)" : "0 1px 3px rgba(0,0,0,0.04)" } },
-      h("div", { style: { fontSize: 9, color: fromIntel ? "#9333ea" : "#a0aec0", textTransform: "uppercase", fontFamily: mono, marginBottom: 3, fontWeight: 600 } }, t.l,
-        fromIntel ? h("span", { style: { width: 4, height: 4, borderRadius: "50%", background: "#9333ea", display: "inline-block", marginLeft: 4 } }) : null
+    var fromETF = hasData && t.sub && t.sub.indexOf("live") >= 0 || (t.sub && t.sub.length > 0);
+    var isLiveData = fromIntel || fromETF;
+    var chgColor = t.chg > 0.1 ? (t.goodUp ? "#16a34a" : "#dc2626") : t.chg < -0.1 ? (t.goodUp ? "#dc2626" : "#16a34a") : "#718096";
+    return h("div", { key: t.l, style: { background: "#ffffff", border: "1px solid " + (isLiveData ? "#9333ea30" : "#e0e5ec"), borderRadius: 10, padding: "8px 12px", minWidth: 100, textAlign: "center", boxShadow: isLiveData ? "0 2px 8px rgba(147,51,234,0.08)" : "0 1px 3px rgba(0,0,0,0.04)" } },
+      h("div", { style: { fontSize: 9, color: isLiveData ? "#9333ea" : "#a0aec0", textTransform: "uppercase", fontFamily: mono, marginBottom: 3, fontWeight: 600 } }, t.l,
+        isLiveData ? h("span", { style: { width: 4, height: 4, borderRadius: "50%", background: "#9333ea", display: "inline-block", marginLeft: 4 } }) : null
       ),
       h("div", { style: { fontSize: 16, fontWeight: 700, color: hasData ? "#1a1a2e" : "#a0aec0", fontFamily: mono } }, t.v),
       t.sub ? h("div", { style: { fontSize: 9, color: "#718096", fontFamily: mono, marginTop: 2 } }, t.sub) : null,
