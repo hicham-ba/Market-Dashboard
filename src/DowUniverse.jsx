@@ -871,7 +871,7 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
     var currentPrice = lp(st.ticker, st.price);
     var currentChange = lc(st.ticker, st.change);
 
-    var isGreenOnRed = currentChange > 0 && worstPct < 0;
+    var isGreenOnRed = currentChange > 0 && worstPct < -0.3;
     var volHigh = parseFloat(st.volume) > parseFloat(st.avgVol) * 1.3;
     if (live && live.volume_vs_avg) volHigh = parseFloat(live.volume_vs_avg) > 130;
     var mas = st.mas || {};
@@ -882,13 +882,18 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
     var liveComposite = maBulls >= 4 ? "Buy" : maBulls >= 3 ? "Hold" : maBulls >= 1 ? "Sell" : "Strong Sell";
     var action = live ? live.action : liveComposite;
 
+    // Live scanner bullish signal counts as smart money equivalent
+    var liveBullish = live && (live.action === "Strong Buy" || live.action === "Buy") && (live.sentiment === "Bullish");
+
     if (sm) { score += 2; reasons.push("Smart Money: " + (sm.signal || sm.description || sm.type).substring(0, 50) + (hasLiveIntel ? " (live)" : "")); }
-    if (isGreenOnRed) { score += 2; reasons.push("GREEN on red day"); }
+    if (liveBullish && !sm) { score += 2; reasons.push("Live scanner: " + live.action + " - " + (live.catalyst || "bullish signal").substring(0, 50) + " (live)"); }
+    if (isGreenOnRed) { score += 2; reasons.push("GREEN on red day (" + (currentChange >= 0 ? "+" : "") + currentChange.toFixed(2) + "%)"); }
     if (volHigh) { score++; reasons.push("Vol above avg" + (live && live.volume_vs_avg ? " " + live.volume_vs_avg + " (live)" : "")); }
     if (maBulls >= 3) { score++; reasons.push(maBulls + "/5 MAs bullish at $" + currentPrice.toFixed(2)); }
     if (action === "Buy" || action === "Strong Buy") { score++; reasons.push("Signal: " + action); }
+    if (currentChange > 2) { score++; reasons.push("Strong move +" + currentChange.toFixed(2) + "%"); }
 
-    if (score >= 3 && (sm || isGreenOnRed)) {
+    if (score >= 3 && (sm || liveBullish || isGreenOnRed)) {
       reasons.push(item.index);
       results.smartFollow.push({ ticker: st.ticker, name: st.name, price: currentPrice, change: currentChange, score: score, reasons: reasons, color: item.sectorColor, sector: item.sectorName, maBulls: maBulls, index: item.index });
     }
@@ -909,14 +914,54 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
   }
 
   // STRATEGY 3: Macro Rotation
+  // Sector keyword mapping for fuzzy matching Claude flow names → our sector names
+  var sectorKeywords = {
+    "energy": ["energy", "oil", "gas", "petro", "crude", "xle"],
+    "healthcare": ["health", "pharma", "biotech", "medical", "drug", "xlv", "defensive"],
+    "technology": ["tech", "software", "semi", "chip", "ai", "xlk", "info"],
+    "financials": ["financ", "bank", "insurance", "xlf", "credit"],
+    "consumer": ["consumer", "retail", "staple", "discret", "food", "xlp", "xly", "defensive", "trade-down"],
+    "industrials": ["industrial", "defense", "aero", "manufactur", "xli"],
+    "materials": ["material", "chemical", "metal", "mining", "xlb", "ag", "fertilizer"],
+    "telecom": ["telecom", "comm", "media", "xlc"],
+    "mag 7": ["mag", "mega", "faang", "growth"],
+    "semiconductors": ["semi", "chip", "gpu"],
+    "biotech": ["biotech", "bio"],
+    "defense": ["defense", "military", "aero"],
+    "ag": ["ag", "fertilizer", "grain", "food supply"],
+    "e-commerce": ["commerce", "fintech", "streaming"]
+  };
+
+  function sectorMatch(toSector, sectorName) {
+    var to = toSector.toLowerCase();
+    var sn = sectorName.toLowerCase();
+    // Direct substring match
+    if (sn.indexOf(to) >= 0 || to.indexOf(sn.split(" ")[0]) >= 0) return true;
+    // Keyword-based match
+    var matched = false;
+    Object.keys(sectorKeywords).forEach(function(secKey) {
+      var keywords = sectorKeywords[secKey];
+      var toHit = false, snHit = false;
+      keywords.forEach(function(kw) {
+        if (to.indexOf(kw) >= 0) toHit = true;
+        if (sn.indexOf(kw) >= 0) snHit = true;
+      });
+      if (toHit && snHit) matched = true;
+    });
+    // Special cases
+    if ((to.indexOf("safe haven") >= 0 || to.indexOf("defensive") >= 0 || to.indexOf("value") >= 0) && (sn.indexOf("health") >= 0 || sn.indexOf("staple") >= 0 || sn.indexOf("telecom") >= 0 || sn.indexOf("consumer") >= 0)) matched = true;
+    if ((to.indexOf("real asset") >= 0 || to.indexOf("commodity") >= 0) && (sn.indexOf("energy") >= 0 || sn.indexOf("material") >= 0)) matched = true;
+    return matched;
+  }
+
   var rotationSignals = [];
   allFlows.forEach(function(f) {
     var flowNum = parseFloat((f.flow || "0").replace(/[^0-9.]/g, "")) || 0;
-    if (flowNum >= 0.5) {
+    if (flowNum >= 0.3) {
       var instConfirm = 0;
       allInstitutions.forEach(function(inv) {
         var move = (inv.move || inv.description || "").toLowerCase();
-        if (move.indexOf("energy") >= 0 || move.indexOf("defensive") >= 0 || move.indexOf("value") >= 0 || move.indexOf("rotate") >= 0 || move.indexOf("shift") >= 0 || move.indexOf("real asset") >= 0 || move.indexOf("inflow") >= 0 || move.indexOf("outflow") >= 0) instConfirm++;
+        if (move.indexOf("energy") >= 0 || move.indexOf("defensive") >= 0 || move.indexOf("value") >= 0 || move.indexOf("rotate") >= 0 || move.indexOf("shift") >= 0 || move.indexOf("real asset") >= 0 || move.indexOf("inflow") >= 0 || move.indexOf("outflow") >= 0 || move.indexOf("buy") >= 0 || move.indexOf("added") >= 0 || move.indexOf("increase") >= 0) instConfirm++;
       });
       if (instConfirm > 5) instConfirm = 5;
       rotationSignals.push({ from: f.from, to: f.to, flow: f.flow || "$?", flowNum: flowNum, drivers: f.drivers || [], instConfirm: instConfirm, label: f.label || f.description || "" });
@@ -925,15 +970,9 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
 
   var rotSeen = {};
   rotationSignals.forEach(function(rot) {
-    var toSector = rot.to.toLowerCase();
     allStocks.forEach(function(item) {
       var st = item.stock;
-      var sn = item.sectorName.toLowerCase();
-      var secWords = sn.split(" ");
-      var toWords = toSector.split(/[\s\/]+/);
-      var match = false;
-      toWords.forEach(function(tw) { secWords.forEach(function(sw) { if (tw.length > 2 && sw.length > 2 && sw.indexOf(tw) >= 0) match = true; }); });
-      if (!match) match = sn.indexOf(toSector.split("/")[0].trim()) >= 0 || toSector.indexOf(sn.split(" ")[0]) >= 0;
+      if (!sectorMatch(rot.to, item.sectorName)) return;
 
       var rsi = st.rsi || 50;
       var live = liveSignals[st.ticker];
@@ -941,11 +980,12 @@ function scanStrategies(allIndexes, macro, staticSmartMoney, lc, liveIntel, lp) 
       var currentPrice = lp(st.ticker, st.price);
       var currentChange = lc(st.ticker, st.change);
 
-      if (match && rsi < 70 && !rotSeen[st.ticker]) {
+      if (rsi < 75 && !rotSeen[st.ticker]) {
         rotSeen[st.ticker] = true;
         var score = 0;
         var reasons = ["Flow: " + rot.from + " -> " + rot.to + " (" + rot.flow + ")" + (hasLiveIntel ? " (live)" : "")];
         if (rot.flowNum >= 4) { score += 2; reasons.push("Massive flow $" + rot.flowNum + "B"); }
+        else if (rot.flowNum >= 1) { score += 2; reasons.push("Significant flow $" + rot.flowNum + "B"); }
         else { score += 1; reasons.push("Flow $" + rot.flowNum + "B"); }
         if (rot.instConfirm >= 3) { score += 2; reasons.push(rot.instConfirm + " institutions confirm"); }
         else if (rot.instConfirm >= 1) { score += 1; reasons.push(rot.instConfirm + " institution confirms"); }
@@ -1264,7 +1304,8 @@ function GalaxyView(props) {
       );
     });
 
-    return h("div", { style: { background: "#ffffff", border: "1px solid " + (active ? color + "30" : "#e0e5ec"), borderRadius: 14, padding: 16, marginBottom: 14 } }, header, descEl, stockRows.length > 0 ? stockRows : h("div", { style: { fontSize: 12, color: "#a0aec0", padding: "10px 0", textAlign: "center" } }, "No stocks scoring 5/7 or higher for this strategy right now."));
+    var emptyMsg = strat === "fear" ? "No stocks scoring 5/7 or higher. Strategy works best during market fear (F&G below 30)." : "No stocks scoring 5/7 or higher. This strategy requires live intel data — click Refresh Intel to activate.";
+    return h("div", { style: { background: "#ffffff", border: "1px solid " + (active ? color + "30" : "#e0e5ec"), borderRadius: 14, padding: 16, marginBottom: 14 } }, header, descEl, stockRows.length > 0 ? stockRows : h("div", { style: { fontSize: 12, color: "#a0aec0", padding: "10px 0", textAlign: "center" } }, emptyMsg));
   }
 
   var scannerContent = h("div", null,
@@ -1276,8 +1317,8 @@ function GalaxyView(props) {
     h("div", { style: { fontSize: 11, color: "#e040fb", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 } }, "Automated Strategy Scanner"),
     h("div", { style: { fontSize: 12, color: "#606f80", marginBottom: 14, lineHeight: 1.5 } }, "Scanning " + (scanResults.totalScanned || 0) + " stocks across DJIA, S&P 500, and NASDAQ. Showing scores 5/7 and above only. " + (scanResults.isLiveIntel ? "Live intelligence active." : "Using snapshot data. Click Fetch AI Intel for live signals.")),
     buildStrategyCard("fear", "Strategy 1: Fear Rotation", "F", "Buy quality names temporarily dragged down by market panic. The key signal is stocks showing short-term weakness (below 5/10/20-day MAs = 'Sell') but STILL above 200-day MA (long-term uptrend intact). Also requires: F&G below 30, analyst Buy/Strong Buy, high institutional ownership, price target 15%+ above current.", "#00d4ff", scanResults.fear.filter(function(x) { return x.score >= 5; })),
-    buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation signals. Requires: Smart Money accumulation OR green on a red day, volume above average, 3+ MAs bullish, composite Buy signal.", "#00ff88", scanResults.smartFollow.filter(function(x) { return x.score >= 5; })),
-    buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. Requires: significant flow into sector, institutional confirmation, RSI below 70. You profit from money movement between sectors.", "#ffd700", scanResults.rotation.filter(function(x) { return x.score >= 5; })),
+    buildStrategyCard("smart", "Strategy 2: Smart Money Follow", "S", "Follow institutional accumulation and live scanner signals. Triggers on: Smart Money accumulation, Claude AI 'Buy' signals, or stocks that are green on a red day with volume and MA confirmation. Requires live intel for best results.", "#00ff88", scanResults.smartFollow.filter(function(x) { return x.score >= 5; })),
+    buildStrategyCard("rotation", "Strategy 3: Macro Rotation", "R", "Ride sector rotation flows. When money moves from one sector to another, buy stocks in the receiving sector. Triggers on: live flow data from Claude AI with institutional confirmation. Requires live intel — click Refresh Intel to activate.", "#ffd700", scanResults.rotation.filter(function(x) { return x.score >= 5; })),
     h("div", { style: { marginTop: 8, padding: 10, background: "#ffffff", borderRadius: 8, border: "1px solid #e0e5ec", fontSize: 11, color: "#a0aec0", lineHeight: 1.5, textAlign: "center" } }, "Disclaimer: These are educational strategy frameworks, not investment advice. Signals are estimated from available data. Always do your own research and consider consulting a financial advisor before trading.")
   );
 
